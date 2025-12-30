@@ -13,4 +13,6 @@ end
 
 group :development do
   gem "rubocop"
+  gem "ruby-lsp"
+  gem "ruby-lsp-rspec"
 end
