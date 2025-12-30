@@ -1,0 +1,57 @@
+name: Octonotify
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# Prevent concurrent executions to avoid state conflicts
+concurrency:
+  group: octonotify
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # Fetch full history to allow proper git operations
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Run Octonotify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: bundle exec bin/octonotify
+
+      - name: Commit and push state changes
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Check if state file has changes
+          if [ -z "$(git status --porcelain -- .octonotify/state.json)" ]; then
+            echo "No state changes to commit"
+            exit 0
+          fi
+
+          # Stage and commit state changes
+          git add .octonotify/state.json
+          git commit -m "Update state [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
