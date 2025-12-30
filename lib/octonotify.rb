@@ -2,6 +2,7 @@
 
 require_relative "octonotify/version"
 require_relative "octonotify/config"
+require_relative "octonotify/state"
 
 module Octonotify
   class Error < StandardError; end
