@@ -3,6 +3,7 @@
 require "spec_helper"
 require "logger"
 require "stringio"
+require "tmpdir"
 
 RSpec.describe Octonotify::Runner do
   let(:config) { instance_double(Octonotify::Config) }
@@ -401,6 +402,103 @@ RSpec.describe Octonotify::Runner do
         runner.run
 
         expect(Octonotify::GraphQLClient).to have_received(:new).with(token: "test_token_123")
+      end
+    end
+
+    context "with no-miss policy for state persistence" do
+      let(:config) { instance_double(Octonotify::Config) }
+      let(:client) { instance_double(Octonotify::GraphQLClient) }
+      let(:poller) { instance_double(Octonotify::Poller) }
+      let(:logger) { Logger.new(StringIO.new) }
+
+      def build_event
+        Octonotify::Poller::Event.new(
+          type: "release",
+          repo: "owner/repo",
+          id: "RE_123",
+          title: "v1.0.0",
+          url: "https://github.com/owner/repo/releases/tag/v1.0.0",
+          time: Time.utc(2024, 1, 15, 12, 0, 0),
+          author: nil,
+          extra: {}
+        )
+      end
+
+      it "does not apply state changes when email delivery fails" do
+        Dir.mktmpdir do |dir|
+          state_path = File.join(dir, "state.json")
+          state = Octonotify::State.new(state_path: state_path)
+
+          poll_result = {
+            events: [build_event],
+            rate_limit: { "remaining" => 4999 },
+            incomplete: false,
+            state_changes: {
+              notified_ids: [{ repo: "owner/repo", event_type: "release", id: "RE_123" }],
+              watermarks: [{ repo: "owner/repo", event_type: "release", watermark_time: "2024-01-15T12:00:00Z" }],
+              resume_cursors: []
+            }
+          }
+          allow(poller).to receive(:poll).and_return(poll_result)
+
+          mailer = instance_double(Octonotify::Mailer)
+          allow(mailer).to receive(:send_digest).and_raise(
+            Octonotify::Mailer::DeliveryError.new({ "user@example.com" => StandardError.new })
+          )
+
+          runner = described_class.new(
+            config: config,
+            state: state,
+            client: client,
+            poller: poller,
+            mailer: mailer,
+            logger: logger,
+            persist_state: false
+          )
+
+          result = runner.run
+          expect(result[:status]).to eq("partial_failure")
+          expect(state.repos).to eq({})
+        end
+      end
+
+      it "applies state changes when email delivery succeeds" do
+        Dir.mktmpdir do |dir|
+          state_path = File.join(dir, "state.json")
+          state = Octonotify::State.new(state_path: state_path)
+
+          poll_result = {
+            events: [build_event],
+            rate_limit: { "remaining" => 4999 },
+            incomplete: false,
+            state_changes: {
+              notified_ids: [{ repo: "owner/repo", event_type: "release", id: "RE_123" }],
+              watermarks: [{ repo: "owner/repo", event_type: "release", watermark_time: "2024-01-15T12:00:00Z" }],
+              resume_cursors: []
+            }
+          }
+          allow(poller).to receive(:poll).and_return(poll_result)
+
+          mailer = instance_double(Octonotify::Mailer, send_digest: nil)
+
+          runner = described_class.new(
+            config: config,
+            state: state,
+            client: client,
+            poller: poller,
+            mailer: mailer,
+            logger: logger,
+            persist_state: false
+          )
+
+          result = runner.run
+          expect(result[:status]).to eq("success")
+
+          event_state = state.repos.dig("owner/repo", "events", "release")
+          expect(event_state).not_to be_nil
+          expect(event_state["recent_notified_ids"]).to include("RE_123")
+          expect(event_state["watermark_time"]).to eq("2024-01-15T12:00:00Z")
+        end
       end
     end
   end

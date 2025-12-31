@@ -19,6 +19,7 @@ module Octonotify
     def poll
       events = []
       rate_limit = nil
+      state_changes = empty_state_changes
 
       @config.repos.each do |repo_name, repo_config|
         owner, repo = repo_name.split("/")
@@ -27,27 +28,30 @@ module Octonotify
           result = poll_event(owner: owner, repo: repo, event_type: event_type)
           events.concat(result[:events])
           rate_limit = result[:rate_limit]
+          merge_state_changes!(state_changes, result[:state_changes])
 
           if rate_limit && rate_limit["remaining"] < RATE_LIMIT_THRESHOLD
-            return { events: events, rate_limit: rate_limit, incomplete: true }
+            return { events: events, rate_limit: rate_limit, incomplete: true, state_changes: state_changes }
           end
         end
       end
 
-      { events: events, rate_limit: rate_limit, incomplete: false }
+      { events: events, rate_limit: rate_limit, incomplete: false, state_changes: state_changes }
     end
 
     private
 
     def poll_event(owner:, repo:, event_type:)
       repo_name = "#{owner}/#{repo}"
-      event_state = @state.event_state(repo_name, event_type)
+      event_state = peek_event_state(repo_name, event_type)
       cursor = event_state["resume_cursor"]
 
       threshold = calculate_threshold(event_state["watermark_time"])
       events = []
       new_watermark = nil
       rate_limit = nil
+      state_changes = empty_state_changes
+      seen_ids = {}
 
       loop do
         result = fetch_events(owner: owner, repo: repo, event_type: event_type, cursor: cursor)
@@ -66,11 +70,13 @@ module Octonotify
           break if event_time < threshold
 
           event = build_event(node, event_type, repo_name)
-          next if @state.notified?(repo_name, event_type, event.id)
+          next if notified?(repo_name, event_type, event.id)
           next unless @state.should_notify?(event_time)
+          next if seen_ids[event.id]
 
           events << event
-          @state.add_notified_id(repo_name, event_type, event.id)
+          seen_ids[event.id] = true
+          state_changes[:notified_ids] << { repo: repo_name, event_type: event_type, id: event.id }
         end
 
         oldest_time = parse_event_time(nodes.last, event_type)
@@ -78,16 +84,27 @@ module Octonotify
         break unless page_info["hasNextPage"]
 
         if rate_limit && rate_limit["remaining"] < RATE_LIMIT_THRESHOLD
-          @state.set_resume_cursor(repo_name, event_type, page_info["endCursor"], reason: "rate limit")
-          return { events: events, rate_limit: rate_limit }
+          state_changes[:resume_cursors] << {
+            repo: repo_name,
+            event_type: event_type,
+            cursor: page_info["endCursor"],
+            reason: "rate limit"
+          }
+          return { events: events, rate_limit: rate_limit, state_changes: state_changes }
         end
 
         cursor = page_info["endCursor"]
       end
 
-      @state.update_watermark(repo_name, event_type, new_watermark.iso8601) if new_watermark
+      if new_watermark
+        state_changes[:watermarks] << {
+          repo: repo_name,
+          event_type: event_type,
+          watermark_time: new_watermark.iso8601
+        }
+      end
 
-      { events: events, rate_limit: rate_limit }
+      { events: events, rate_limit: rate_limit, state_changes: state_changes }
     end
 
     def fetch_events(owner:, repo:, event_type:, cursor:)
@@ -156,6 +173,36 @@ module Octonotify
         author: node.dig("author", "login"),
         extra: extra
       )
+    end
+
+    def empty_state_changes
+      { notified_ids: [], watermarks: [], resume_cursors: [] }
+    end
+
+    def merge_state_changes!(into, other)
+      return if other.nil?
+
+      into[:notified_ids].concat(other[:notified_ids] || [])
+      into[:watermarks].concat(other[:watermarks] || [])
+      into[:resume_cursors].concat(other[:resume_cursors] || [])
+    end
+
+    def peek_event_state(repo_name, event_type)
+      existing = @state.repos.dig(repo_name, "events", event_type)
+      return existing if existing
+
+      {
+        "watermark_time" => @state.notify_after,
+        "resume_cursor" => nil,
+        "recent_notified_ids" => [],
+        "incomplete" => false,
+        "reason" => nil
+      }
+    end
+
+    def notified?(repo_name, event_type, id)
+      ids = @state.repos.dig(repo_name, "events", event_type, "recent_notified_ids") || []
+      ids.include?(id)
     end
   end
 end

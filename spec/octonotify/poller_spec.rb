@@ -93,10 +93,15 @@ RSpec.describe Octonotify::Poller do
           expect(result[:incomplete]).to eq(false)
           expect(result[:rate_limit]).to include("remaining" => 4999)
 
-          # Verify state side effects
-          expect(state.notified?("owner/repo", "release", "RE_123")).to eq(true)
-          event_state = state.event_state("owner/repo", "release")
-          expect(event_state["watermark_time"]).to eq("2024-01-15T12:00:00Z")
+          # Verify state changes are returned (but not applied inside Poller)
+          expect(state.repos).to eq({})
+          expect(result[:state_changes]).to include(:notified_ids, :watermarks, :resume_cursors)
+          expect(result[:state_changes][:notified_ids]).to include(
+            repo: "owner/repo", event_type: "release", id: "RE_123"
+          )
+          expect(result[:state_changes][:watermarks]).to include(
+            repo: "owner/repo", event_type: "release", watermark_time: "2024-01-15T12:00:00Z"
+          )
         end
       end
     end
@@ -353,9 +358,13 @@ RSpec.describe Octonotify::Poller do
         with_state_file(default_state) do |poller, state|
           result = poller.poll
 
-          event_state = state.event_state("owner/repo", "release")
-          expect(event_state["resume_cursor"]).to eq("cursor1")
-          expect(event_state["incomplete"]).to eq(true)
+          expect(state.repos).to eq({})
+          expect(result[:state_changes][:resume_cursors]).to include(
+            repo: "owner/repo",
+            event_type: "release",
+            cursor: "cursor1",
+            reason: "rate limit"
+          )
           expect(result[:events].size).to eq(1)
         end
       end
@@ -392,9 +401,8 @@ RSpec.describe Octonotify::Poller do
         with_state_file(state_with_cursor) do |poller, state|
           poller.poll
 
-          event_state = state.event_state("owner/repo", "release")
-          expect(event_state["resume_cursor"]).to be_nil
-          expect(event_state["incomplete"]).to eq(false)
+          # Poller does not mutate state; Runner will apply watermark update which clears resume_cursor.
+          expect(state.repos["owner/repo"]["events"]["release"]["resume_cursor"]).to eq("old_cursor")
         end
       end
     end

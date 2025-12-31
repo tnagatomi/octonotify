@@ -80,8 +80,10 @@ module Octonotify
       if poll_result[:events].any?
         @logger.info("Found #{poll_result[:events].size} new event(s)")
         mailer.send_digest(poll_result[:events])
+        apply_state_changes(poll_result[:state_changes])
         @logger.info("Sent notification email(s)")
       else
+        apply_state_changes(poll_result[:state_changes])
         @logger.info("No new events found")
       end
 
@@ -93,6 +95,7 @@ module Octonotify
       }
     rescue Mailer::DeliveryError => e
       @logger.warn("Email delivery partially failed: #{e.message}")
+      @logger.warn("State changes were not persisted due to email delivery failure; events will be retried next run")
       {
         status: "partial_failure",
         rate_limit: poll_result[:rate_limit],
@@ -115,6 +118,22 @@ module Octonotify
       return unless result[:rate_limit]
 
       @logger.info("Rate limit remaining: #{result[:rate_limit]["remaining"]}")
+    end
+
+    def apply_state_changes(state_changes)
+      return if state_changes.nil?
+
+      Array(state_changes[:notified_ids]).each do |item|
+        @state.add_notified_id(item[:repo], item[:event_type], item[:id])
+      end
+
+      Array(state_changes[:resume_cursors]).each do |item|
+        @state.set_resume_cursor(item[:repo], item[:event_type], item[:cursor], reason: item[:reason])
+      end
+
+      Array(state_changes[:watermarks]).each do |item|
+        @state.update_watermark(item[:repo], item[:event_type], item[:watermark_time])
+      end
     end
 
     def default_logger
