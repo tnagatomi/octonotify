@@ -25,6 +25,7 @@ Go to your forked repository's Settings → Secrets and variables → Actions an
 | `SMTP_PORT` | SMTP server port | `587` |
 | `SMTP_USERNAME` | SMTP authentication username | `your-email@example.com` |
 | `SMTP_PASSWORD` | SMTP authentication password | App password for Gmail |
+| `OCTONOTIFY_FROM` | Sender email address | `Octonotify <noreply@example.com>` |
 | `OCTONOTIFY_TO` | Recipient email addresses (comma-separated) | `user1@example.com,user2@example.com` |
 | `GITHUB_TOKEN` | GitHub token. In GitHub Actions, the workflow uses the default token (`github.token`) automatically. Set this secret only if you need a PAT (e.g., to monitor private repositories or increase rate limits). | `ghp_...` |
 
@@ -57,7 +58,6 @@ Go to the Actions tab in your forked repository and enable the workflow.
 | Key | Required | Description | Default |
 |-----|----------|-------------|---------|
 | `timezone` | No | Timezone for email display (IANA format) | `UTC` |
-| `from` | Yes | Sender email address | - |
 | `repos` | Yes | Repository monitoring configuration | - |
 
 ### Event Types

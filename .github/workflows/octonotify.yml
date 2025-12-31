@@ -38,6 +38,7 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          OCTONOTIFY_FROM: ${{ secrets.OCTONOTIFY_FROM }}
           OCTONOTIFY_TO: ${{ secrets.OCTONOTIFY_TO }}
         run: bundle exec bin/octonotify
 

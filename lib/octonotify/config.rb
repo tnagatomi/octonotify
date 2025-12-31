@@ -40,9 +40,13 @@ module Octonotify
       raise ConfigError, "Config file is empty or invalid" if raw.nil?
 
       @timezone = (raw["timezone"] || DEFAULT_TIMEZONE).to_s.strip
-      @from = (raw["from"] || "").to_s.strip
+      @from = load_from
       @to = load_recipients
       @repos = parse_repos(raw["repos"] || {})
+    end
+
+    def load_from
+      ENV.fetch("OCTONOTIFY_FROM", "").to_s.strip
     end
 
     def load_recipients
@@ -77,7 +81,11 @@ module Octonotify
     end
 
     def validate_from
-      raise ConfigError, "'from' is required" if @from.nil? || @from.empty?
+      if @from.nil? || @from.empty?
+        raise ConfigError,
+              "'from' is required. " \
+              "Set OCTONOTIFY_FROM, e.g. 'Octonotify <noreply@example.com>'"
+      end
 
       validate_header_value!(@from, field: "from")
     end

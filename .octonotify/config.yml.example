@@ -5,11 +5,8 @@
 # Default: UTC
 timezone: Asia/Tokyo
 
-# Sender address for notification emails
-from: Octonotify <noreply@example.com>
-
-# Recipients are configured via the OCTONOTIFY_TO environment variable (comma-separated),
-# e.g. OCTONOTIFY_TO="user1@example.com,user2@example.com"
+# Sender and recipients are configured via environment variables (secrets).
+# See README.md for details.
 
 # Repositories and events to monitor
 # Key: owner/repo format
