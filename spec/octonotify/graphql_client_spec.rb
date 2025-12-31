@@ -286,7 +286,7 @@ RSpec.describe Octonotify::GraphQLClient do
       client = described_class.new(token: token, connection: build_test_connection(stubs))
       result = client.fetch_releases(owner: "owner", repo: "repo", after: "cursor123")
 
-      expect(result["repository"]["releases"]["pageInfo"]["hasNextPage"]).to eq(false)
+      expect(result["repository"]["releases"]["pageInfo"]["hasNextPage"]).to be(false)
       stubs.verify_stubbed_calls
     end
   end

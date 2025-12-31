@@ -154,7 +154,7 @@ RSpec.describe Octonotify::Runner do
         result = runner.run
 
         expect(result[:status]).to eq("incomplete")
-        expect(result[:incomplete]).to eq(true)
+        expect(result[:incomplete]).to be(true)
       end
 
       it "calls finish_run with incomplete status" do

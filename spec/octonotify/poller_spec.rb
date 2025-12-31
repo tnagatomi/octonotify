@@ -90,7 +90,7 @@ RSpec.describe Octonotify::Poller do
             url: "https://github.com/owner/repo/releases/tag/v1.0.0",
             extra: { tag_name: "v1.0.0" }
           )
-          expect(result[:incomplete]).to eq(false)
+          expect(result[:incomplete]).to be(false)
           expect(result[:rate_limit]).to include("remaining" => 4999)
 
           # Verify state changes are returned (but not applied inside Poller)
@@ -266,7 +266,7 @@ RSpec.describe Octonotify::Poller do
           result = poller.poll
 
           expect(result[:events]).to be_empty
-          expect(result[:incomplete]).to eq(false)
+          expect(result[:incomplete]).to be(false)
         end
       end
     end
@@ -434,7 +434,7 @@ RSpec.describe Octonotify::Poller do
         with_state_file(default_state) do |poller, _state|
           result = poller.poll
 
-          expect(result[:incomplete]).to eq(true)
+          expect(result[:incomplete]).to be(true)
           expect(result[:events].size).to eq(1)
           expect(result[:rate_limit]["remaining"]).to eq(50)
         end
@@ -450,39 +450,35 @@ RSpec.describe Octonotify::Poller do
       end
 
       it "polls all repos and event types and collects events" do
-        allow(client).to receive(:fetch_releases).and_return(
-          release_response(nodes: [
-                             {
-                               "id" => "RE_1",
-                               "name" => "v1.0.0",
-                               "tagName" => "v1.0.0",
-                               "url" => "https://github.com/owner/repo1/releases/tag/v1.0.0",
-                               "publishedAt" => "2024-01-15T12:00:00Z"
-                             }
-                           ])
-        )
-        allow(client).to receive(:fetch_issues).and_return(
-          issue_response(nodes: [
-                           {
-                             "id" => "I_1",
-                             "title" => "Issue",
-                             "url" => "https://github.com/owner/repo1/issues/1",
-                             "createdAt" => "2024-01-15T12:00:00Z",
-                             "author" => { "login" => "alice" }
-                           }
-                         ])
-        )
-        allow(client).to receive(:fetch_merged_pull_requests).and_return(
-          pr_response(nodes: [
-                        {
-                          "id" => "PR_1",
-                          "title" => "PR",
-                          "url" => "https://github.com/owner/repo2/pull/1",
-                          "mergedAt" => "2024-01-15T12:00:00Z",
-                          "author" => { "login" => "bob" },
-                          "mergedBy" => { "login" => "charlie" }
-                        }
-                      ])
+        allow(client).to receive_messages(
+          fetch_releases: release_response(nodes: [
+                                             {
+                                               "id" => "RE_1",
+                                               "name" => "v1.0.0",
+                                               "tagName" => "v1.0.0",
+                                               "url" => "https://github.com/owner/repo1/releases/tag/v1.0.0",
+                                               "publishedAt" => "2024-01-15T12:00:00Z"
+                                             }
+                                           ]),
+          fetch_issues: issue_response(nodes: [
+                                         {
+                                           "id" => "I_1",
+                                           "title" => "Issue",
+                                           "url" => "https://github.com/owner/repo1/issues/1",
+                                           "createdAt" => "2024-01-15T12:00:00Z",
+                                           "author" => { "login" => "alice" }
+                                         }
+                                       ]),
+          fetch_merged_pull_requests: pr_response(nodes: [
+                                                    {
+                                                      "id" => "PR_1",
+                                                      "title" => "PR",
+                                                      "url" => "https://github.com/owner/repo2/pull/1",
+                                                      "mergedAt" => "2024-01-15T12:00:00Z",
+                                                      "author" => { "login" => "bob" },
+                                                      "mergedBy" => { "login" => "charlie" }
+                                                    }
+                                                  ])
         )
 
         with_state_file(default_state) do |poller, _state|

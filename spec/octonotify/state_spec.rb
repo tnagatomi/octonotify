@@ -147,7 +147,7 @@ RSpec.describe Octonotify::State do
         event = state.event_state("owner/repo", "release")
         expect(event["watermark_time"]).to eq(state.notify_after)
         expect(event["recent_notified_ids"]).to eq([])
-        expect(event["incomplete"]).to eq(false)
+        expect(event["incomplete"]).to be(false)
       end
     end
   end
@@ -163,7 +163,7 @@ RSpec.describe Octonotify::State do
         event = state.event_state("owner/repo", "release")
         expect(event["watermark_time"]).to eq("2024-01-15T00:00:00Z")
         expect(event["resume_cursor"]).to be_nil
-        expect(event["incomplete"]).to eq(false)
+        expect(event["incomplete"]).to be(false)
         expect(event["last_success_at"]).not_to be_nil
       end
     end
@@ -178,7 +178,7 @@ RSpec.describe Octonotify::State do
 
         event = state.event_state("owner/repo", "release")
         expect(event["resume_cursor"]).to eq("cursor123")
-        expect(event["incomplete"]).to eq(true)
+        expect(event["incomplete"]).to be(true)
         expect(event["reason"]).to eq("rate limit exceeded")
       end
     end
@@ -189,10 +189,10 @@ RSpec.describe Octonotify::State do
       with_state_file do |path|
         state = described_class.load(state_path: path)
 
-        expect(state.notified?("owner/repo", "release", "R_123")).to eq(false)
+        expect(state.notified?("owner/repo", "release", "R_123")).to be(false)
 
         state.add_notified_id("owner/repo", "release", "R_123")
-        expect(state.notified?("owner/repo", "release", "R_123")).to eq(true)
+        expect(state.notified?("owner/repo", "release", "R_123")).to be(true)
       end
     end
 
@@ -204,8 +204,8 @@ RSpec.describe Octonotify::State do
 
         event = state.event_state("owner/repo", "release")
         expect(event["recent_notified_ids"].size).to eq(described_class::RECENT_IDS_LIMIT)
-        expect(state.notified?("owner/repo", "release", "R_0")).to eq(false)
-        expect(state.notified?("owner/repo", "release", "R_149")).to eq(true)
+        expect(state.notified?("owner/repo", "release", "R_0")).to be(false)
+        expect(state.notified?("owner/repo", "release", "R_149")).to be(true)
       end
     end
   end
@@ -223,8 +223,8 @@ RSpec.describe Octonotify::State do
       with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
 
-        expect(state.should_notify?("2024-01-01T00:00:01Z")).to eq(true)
-        expect(state.should_notify?("2024-01-02T00:00:00Z")).to eq(true)
+        expect(state.should_notify?("2024-01-01T00:00:01Z")).to be(true)
+        expect(state.should_notify?("2024-01-02T00:00:00Z")).to be(true)
       end
     end
 
@@ -240,15 +240,15 @@ RSpec.describe Octonotify::State do
       with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
 
-        expect(state.should_notify?("2024-01-01T00:00:00Z")).to eq(false)
-        expect(state.should_notify?("2023-12-31T00:00:00Z")).to eq(false)
+        expect(state.should_notify?("2024-01-01T00:00:00Z")).to be(false)
+        expect(state.should_notify?("2023-12-31T00:00:00Z")).to be(false)
       end
     end
 
     it "returns false for nil event time" do
       with_state_file do |path|
         state = described_class.load(state_path: path)
-        expect(state.should_notify?(nil)).to eq(false)
+        expect(state.should_notify?(nil)).to be(false)
       end
     end
   end

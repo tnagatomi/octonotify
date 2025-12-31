@@ -1,3 +1,6 @@
+plugins:
+  - rubocop-rspec
+
 AllCops:
   TargetRubyVersion: 4.0
   NewCops: enable
@@ -30,4 +33,23 @@ Metrics/PerceivedComplexity:
   Enabled: false
 
 Style/Documentation:
+  Enabled: false
+
+# RSpec rules
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+RSpec/AnyInstance:
   Enabled: false
