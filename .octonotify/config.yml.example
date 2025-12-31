@@ -1,0 +1,36 @@
+# Octonotify Configuration
+# Copy this file to .octonotify/config.yml and customize it.
+
+# Timezone for email display (IANA timezone identifier)
+# Default: UTC
+timezone: Asia/Tokyo
+
+# Sender address for notification emails
+from: Octonotify <noreply@example.com>
+
+# Recipients (emails are sent separately to each recipient)
+to:
+  - user1@example.com
+  - user2@example.com
+
+# Repositories and events to monitor
+# Key: owner/repo format
+# events: Array of event types to monitor
+#   - release: Release published
+#   - pull_request_created: Pull request created
+#   - pull_request_merged: Pull request merged
+#   - issue_created: Issue created (excludes pull requests)
+repos:
+  cli/cli:
+    events:
+      - release
+  rails/rails:
+    events:
+      - release
+      - pull_request_merged
+  ghostty-org/ghostty:
+    events:
+      - release
+      - pull_request_created
+      - pull_request_merged
+      - issue_created
