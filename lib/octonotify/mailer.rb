@@ -46,7 +46,7 @@ module Octonotify
       smtp_settings = {
         address: host,
         port: ENV.fetch("SMTP_PORT", 587).to_i,
-        enable_starttls_auto: true
+        enable_starttls: true
       }
 
       if username && !username.empty?

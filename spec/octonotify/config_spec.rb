@@ -142,6 +142,66 @@ RSpec.describe Octonotify::Config do
       end
     end
 
+    context "with blank recipients" do
+      it "treats blank recipients as missing and raises ConfigError" do
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>"
+          to:
+            - "   "
+          repos:
+            owner/repo:
+              events:
+                - release
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect {
+            described_class.load(config_path: path)
+          }.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
+        end
+      end
+    end
+
+    context "with newline in from" do
+      it "raises ConfigError to prevent header injection" do
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>\\nBcc: attacker@example.com"
+          to:
+            - user@example.com
+          repos:
+            owner/repo:
+              events:
+                - release
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect {
+            described_class.load(config_path: path)
+          }.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
+        end
+      end
+    end
+
+    context "with newline in to recipient" do
+      it "raises ConfigError to prevent header injection" do
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>"
+          to:
+            - "user@example.com\\r\\nBcc: attacker@example.com"
+          repos:
+            owner/repo:
+              events:
+                - release
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect {
+            described_class.load(config_path: path)
+          }.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
+        end
+      end
+    end
+
     context "with invalid repo format" do
       it "raises ConfigError for repo without slash" do
         yaml = <<~YAML
@@ -178,6 +238,41 @@ RSpec.describe Octonotify::Config do
           expect {
             described_class.load(config_path: path)
           }.to raise_error(Octonotify::ConfigError, /invalid events.*invalid_event/)
+        end
+      end
+    end
+
+    context "with repos not a mapping" do
+      it "raises ConfigError" do
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>"
+          to:
+            - user@example.com
+          repos: []
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect {
+            described_class.load(config_path: path)
+          }.to raise_error(Octonotify::ConfigError, /'repos' must be a mapping/)
+        end
+      end
+    end
+
+    context "with repo config not a mapping" do
+      it "raises ConfigError" do
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>"
+          to:
+            - user@example.com
+          repos:
+            owner/repo: "oops"
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect {
+            described_class.load(config_path: path)
+          }.to raise_error(Octonotify::ConfigError, /Repo config must be a mapping/)
         end
       end
     end
