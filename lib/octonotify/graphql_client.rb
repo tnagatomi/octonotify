@@ -83,7 +83,7 @@ module Octonotify
       query = <<~GRAPHQL
         query($owner: String!, $repo: String!, $first: Int!, $after: String) {
           repository(owner: $owner, name: $repo) {
-            pullRequests(first: $first, after: $after, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
+            pullRequests(first: $first, after: $after, states: [OPEN, CLOSED, MERGED], orderBy: {field: CREATED_AT, direction: DESC}) {
               pageInfo {
                 hasNextPage
                 endCursor
@@ -115,7 +115,7 @@ module Octonotify
       query = <<~GRAPHQL
         query($owner: String!, $repo: String!, $first: Int!, $after: String) {
           repository(owner: $owner, name: $repo) {
-            issues(first: $first, after: $after, orderBy: {field: CREATED_AT, direction: DESC}) {
+            issues(first: $first, after: $after, states: [OPEN, CLOSED], orderBy: {field: CREATED_AT, direction: DESC}) {
               pageInfo {
                 hasNextPage
                 endCursor

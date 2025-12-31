@@ -152,7 +152,11 @@ RSpec.describe Octonotify::GraphQLClient do
       }.to_json
 
       stubs = Faraday::Adapter::Test::Stubs.new do |stub|
-        stub.post("") { [200, { "Content-Type" => "application/json" }, response_body] }
+        stub.post("") do |env|
+          body = JSON.parse(env.body)
+          expect(body["query"]).to include("states: [OPEN, CLOSED, MERGED]")
+          [200, { "Content-Type" => "application/json" }, response_body]
+        end
       end
 
       client = described_class.new(token: token, connection: build_test_connection(stubs))
@@ -203,7 +207,11 @@ RSpec.describe Octonotify::GraphQLClient do
       }.to_json
 
       stubs = Faraday::Adapter::Test::Stubs.new do |stub|
-        stub.post("") { [200, { "Content-Type" => "application/json" }, response_body] }
+        stub.post("") do |env|
+          body = JSON.parse(env.body)
+          expect(body["query"]).to include("states: [OPEN, CLOSED]")
+          [200, { "Content-Type" => "application/json" }, response_body]
+        end
       end
 
       client = described_class.new(token: token, connection: build_test_connection(stubs))
