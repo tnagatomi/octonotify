@@ -21,10 +21,10 @@ Go to your forked repository's Settings → Secrets and variables → Actions an
 
 | Secret | Description | Example |
 |--------|-------------|---------|
-| `SMTP_HOST` | SMTP server hostname | `smtp.gmail.com` |
-| `SMTP_PORT` | SMTP server port | `587` |
-| `SMTP_USERNAME` | SMTP authentication username | `your-email@example.com` |
-| `SMTP_PASSWORD` | SMTP authentication password | App password for Gmail |
+| `OCTONOTIFY_SMTP_HOST` | SMTP server hostname | `smtp.gmail.com` |
+| `OCTONOTIFY_SMTP_PORT` | SMTP server port (optional; default: `587`) | `587` |
+| `OCTONOTIFY_SMTP_USERNAME` | SMTP authentication username (optional) | `your-email@example.com` |
+| `OCTONOTIFY_SMTP_PASSWORD` | SMTP authentication password (required when `OCTONOTIFY_SMTP_USERNAME` is set) | App password for Gmail |
 | `OCTONOTIFY_FROM` | Sender email address | `Octonotify <noreply@example.com>` |
 | `OCTONOTIFY_TO` | Recipient email addresses (comma-separated) | `user1@example.com,user2@example.com` |
 | `GITHUB_TOKEN` | GitHub token. In GitHub Actions, the workflow uses the default token (`github.token`) automatically. Set this secret only if you need a PAT (e.g., to monitor private repositories or increase rate limits). | `ghp_...` |
