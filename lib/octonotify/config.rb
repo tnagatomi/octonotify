@@ -41,8 +41,15 @@ module Octonotify
 
       @timezone = (raw["timezone"] || DEFAULT_TIMEZONE).to_s.strip
       @from = (raw["from"] || "").to_s.strip
-      @to = Array(raw["to"]).compact.map(&:to_s).map(&:strip).reject(&:empty?)
+      @to = load_recipients
       @repos = parse_repos(raw["repos"] || {})
+    end
+
+    def load_recipients
+      env_value = ENV.fetch("OCTONOTIFY_TO", nil)
+      return [] if env_value.nil? || env_value.strip.empty?
+
+      env_value.split(",").map(&:strip).reject(&:empty?)
     end
 
     def parse_repos(repos_hash)
@@ -76,7 +83,11 @@ module Octonotify
     end
 
     def validate_to
-      raise ConfigError, "'to' must have at least one recipient" if @to.empty?
+      if @to.empty?
+        raise ConfigError,
+              "'to' must have at least one recipient. " \
+              "Set OCTONOTIFY_TO (comma-separated), e.g. 'user1@example.com,user2@example.com'"
+      end
 
       @to.each { |recipient| validate_header_value!(recipient, field: "to") }
     end

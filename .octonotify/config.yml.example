@@ -8,10 +8,8 @@ timezone: Asia/Tokyo
 # Sender address for notification emails
 from: Octonotify <noreply@example.com>
 
-# Recipients (emails are sent separately to each recipient)
-to:
-  - user1@example.com
-  - user2@example.com
+# Recipients are configured via the OCTONOTIFY_TO environment variable (comma-separated),
+# e.g. OCTONOTIFY_TO="user1@example.com,user2@example.com"
 
 # Repositories and events to monitor
 # Key: owner/repo format

@@ -8,14 +8,24 @@ RSpec.describe Octonotify::Config do
     <<~YAML
       timezone: Asia/Tokyo
       from: "Octonotify <noreply@example.com>"
-      to:
-        - user@example.com
       repos:
         owner/repo:
           events:
             - release
             - pull_request_merged
     YAML
+  end
+
+  around do |example|
+    original_value = ENV.fetch("OCTONOTIFY_TO", nil)
+    ENV["OCTONOTIFY_TO"] = "user@example.com"
+    example.run
+  ensure
+    if original_value.nil?
+      ENV.delete("OCTONOTIFY_TO")
+    else
+      ENV["OCTONOTIFY_TO"] = original_value
+    end
   end
 
   def with_config_file(yaml_content)
@@ -44,8 +54,6 @@ RSpec.describe Octonotify::Config do
       it "uses UTC as default timezone" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events:
@@ -58,10 +66,10 @@ RSpec.describe Octonotify::Config do
         end
       end
 
-      it "accepts single recipient as string" do
+      it "loads recipients from OCTONOTIFY_TO environment variable" do
+        ENV["OCTONOTIFY_TO"] = "alice@example.com, bob@example.com"
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to: user@example.com
           repos:
             owner/repo:
               events:
@@ -70,7 +78,7 @@ RSpec.describe Octonotify::Config do
 
         with_config_file(yaml) do |path|
           config = described_class.load(config_path: path)
-          expect(config.to).to eq(["user@example.com"])
+          expect(config.to).to eq(%w[alice@example.com bob@example.com])
         end
       end
     end
@@ -88,8 +96,6 @@ RSpec.describe Octonotify::Config do
         yaml = <<~YAML
           timezone: Invalid/Zone
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events:
@@ -107,8 +113,6 @@ RSpec.describe Octonotify::Config do
     context "with missing from" do
       it "raises ConfigError" do
         yaml = <<~YAML
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events:
@@ -123,11 +127,11 @@ RSpec.describe Octonotify::Config do
       end
     end
 
-    context "with empty to" do
+    context "with empty OCTONOTIFY_TO" do
       it "raises ConfigError" do
+        ENV["OCTONOTIFY_TO"] = ""
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to: []
           repos:
             owner/repo:
               events:
@@ -137,17 +141,16 @@ RSpec.describe Octonotify::Config do
         with_config_file(yaml) do |path|
           expect do
             described_class.load(config_path: path)
-          end.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
+          end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_TO/)
         end
       end
     end
 
-    context "with blank recipients" do
-      it "treats blank recipients as missing and raises ConfigError" do
+    context "with missing OCTONOTIFY_TO" do
+      it "raises ConfigError" do
+        ENV.delete("OCTONOTIFY_TO")
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - "   "
           repos:
             owner/repo:
               events:
@@ -157,7 +160,26 @@ RSpec.describe Octonotify::Config do
         with_config_file(yaml) do |path|
           expect do
             described_class.load(config_path: path)
-          end.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
+          end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_TO/)
+        end
+      end
+    end
+
+    context "with blank recipients in OCTONOTIFY_TO" do
+      it "treats blank recipients as missing and raises ConfigError" do
+        ENV["OCTONOTIFY_TO"] = "   ,   "
+        yaml = <<~YAML
+          from: "Octonotify <noreply@example.com>"
+          repos:
+            owner/repo:
+              events:
+                - release
+        YAML
+
+        with_config_file(yaml) do |path|
+          expect do
+            described_class.load(config_path: path)
+          end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_TO/)
         end
       end
     end
@@ -166,8 +188,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError to prevent header injection" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>\\nBcc: attacker@example.com"
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events:
@@ -184,10 +204,9 @@ RSpec.describe Octonotify::Config do
 
     context "with newline in to recipient" do
       it "raises ConfigError to prevent header injection" do
+        ENV["OCTONOTIFY_TO"] = "user@example.com\r\nBcc: attacker@example.com"
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - "user@example.com\\r\\nBcc: attacker@example.com"
           repos:
             owner/repo:
               events:
@@ -206,8 +225,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError for repo without slash" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             invalid-repo:
               events:
@@ -226,8 +243,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events:
@@ -246,8 +261,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos: []
         YAML
 
@@ -263,8 +276,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             owner/repo: "oops"
         YAML
@@ -281,8 +292,6 @@ RSpec.describe Octonotify::Config do
       it "raises ConfigError" do
         yaml = <<~YAML
           from: "Octonotify <noreply@example.com>"
-          to:
-            - user@example.com
           repos:
             owner/repo:
               events: []
@@ -311,8 +320,6 @@ RSpec.describe Octonotify::Config do
     it "returns repos that have the specified event" do
       yaml = <<~YAML
         from: "Octonotify <noreply@example.com>"
-        to:
-          - user@example.com
         repos:
           owner/repo1:
             events:
