@@ -66,9 +66,9 @@ RSpec.describe Octonotify::State do
     context "when state file is invalid JSON" do
       it "raises StateError" do
         with_state_file("invalid json") do |path|
-          expect {
+          expect do
             described_class.load(state_path: path)
-          }.to raise_error(Octonotify::StateError, /Invalid state file/)
+          end.to raise_error(Octonotify::StateError, /Invalid state file/)
         end
       end
     end

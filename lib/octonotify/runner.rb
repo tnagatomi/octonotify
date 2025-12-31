@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-require 'English'
+require "English"
 
 module Octonotify
   class Runner
+    # rubocop:disable Metrics/ParameterLists
     def initialize(
       config: nil,
       state: nil,
@@ -27,9 +28,10 @@ module Octonotify
       @logger = logger || default_logger
       @persist_state = persist_state
     end
+    # rubocop:enable Metrics/ParameterLists
 
     def run
-      @logger.info('Starting Octonotify run')
+      @logger.info("Starting Octonotify run")
 
       config = @config ||= Config.load(config_path: @config_path)
       state = @state ||= State.load(state_path: @state_path)
@@ -45,7 +47,7 @@ module Octonotify
         result = execute_poll(poller, mailer)
         state.finish_run(status: result[:status], rate_limit: result[:rate_limit])
       rescue StandardError => e
-        state.finish_run(status: 'error', rate_limit: nil)
+        state.finish_run(status: "error", rate_limit: nil)
         @logger.error("Run failed: #{e.message}")
         raise
       ensure
@@ -68,7 +70,7 @@ module Octonotify
     end
 
     def build_client
-      token = @github_token || ENV.fetch('GITHUB_TOKEN', nil)
+      token = @github_token || ENV.fetch("GITHUB_TOKEN", nil)
       GraphQLClient.new(token: token)
     end
 
@@ -78,13 +80,13 @@ module Octonotify
       if poll_result[:events].any?
         @logger.info("Found #{poll_result[:events].size} new event(s)")
         mailer.send_digest(poll_result[:events])
-        @logger.info('Sent notification email(s)')
+        @logger.info("Sent notification email(s)")
       else
-        @logger.info('No new events found')
+        @logger.info("No new events found")
       end
 
       {
-        status: poll_result[:incomplete] ? 'incomplete' : 'success',
+        status: poll_result[:incomplete] ? "incomplete" : "success",
         rate_limit: poll_result[:rate_limit],
         events_count: poll_result[:events].size,
         incomplete: poll_result[:incomplete]
@@ -92,7 +94,7 @@ module Octonotify
     rescue Mailer::DeliveryError => e
       @logger.warn("Email delivery partially failed: #{e.message}")
       {
-        status: 'partial_failure',
+        status: "partial_failure",
         rate_limit: poll_result[:rate_limit],
         events_count: poll_result[:events].size,
         incomplete: poll_result[:incomplete],
@@ -102,21 +104,21 @@ module Octonotify
 
     def log_result(result)
       case result[:status]
-      when 'success'
+      when "success"
         @logger.info("Run completed successfully. Events: #{result[:events_count]}")
-      when 'incomplete'
-        @logger.warn('Run completed but incomplete due to rate limiting')
-      when 'partial_failure'
-        @logger.warn('Run completed with partial email delivery failure')
+      when "incomplete"
+        @logger.warn("Run completed but incomplete due to rate limiting")
+      when "partial_failure"
+        @logger.warn("Run completed with partial email delivery failure")
       end
 
       return unless result[:rate_limit]
 
-      @logger.info("Rate limit remaining: #{result[:rate_limit]['remaining']}")
+      @logger.info("Rate limit remaining: #{result[:rate_limit]["remaining"]}")
     end
 
     def default_logger
-      require 'logger'
+      require "logger"
       logger = Logger.new($stdout)
       logger.level = Logger::INFO
       logger.formatter = proc do |severity, _datetime, _progname, msg|

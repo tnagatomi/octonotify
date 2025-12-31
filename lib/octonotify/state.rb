@@ -39,17 +39,17 @@ module Octonotify
 
     def start_run
       @last_run = {
-        'started_at' => Time.now.utc.iso8601,
-        'finished_at' => nil,
-        'status' => 'running',
-        'rate_limit' => nil
+        "started_at" => Time.now.utc.iso8601,
+        "finished_at" => nil,
+        "status" => "running",
+        "rate_limit" => nil
       }
     end
 
     def finish_run(status:, rate_limit: nil)
-      @last_run['finished_at'] = Time.now.utc.iso8601
-      @last_run['status'] = status
-      @last_run['rate_limit'] = rate_limit
+      @last_run["finished_at"] = Time.now.utc.iso8601
+      @last_run["status"] = status
+      @last_run["rate_limit"] = rate_limit
     end
 
     def repo_state(repo_name)
@@ -110,10 +110,10 @@ module Octonotify
 
     def load_state
       data = JSON.parse(File.read(@state_path))
-      @initialized_at = data['initialized_at']
-      @notify_after = data['notify_after']
-      @last_run = data['last_run'] || {}
-      @repos = data['repos'] || {}
+      @initialized_at = data["initialized_at"]
+      @notify_after = data["notify_after"]
+      @last_run = data["last_run"] || {}
+      @repos = data["repos"] || {}
     rescue JSON::ParserError => e
       raise StateError, "Invalid state file: #{e.message}"
     end
@@ -146,7 +146,7 @@ module Octonotify
 
     def ensure_state_dir_exists
       dir = File.dirname(@state_path)
-      FileUtils.mkdir_p(dir) unless dir.nil? || dir == '.'
+      FileUtils.mkdir_p(dir) unless dir.nil? || dir == "."
     end
 
     def ensure_state_path_is_safe!
@@ -167,7 +167,7 @@ module Octonotify
         File.write(tmp_path, content)
         File.rename(tmp_path, path)
       ensure
-        File.delete(tmp_path) if File.exist?(tmp_path)
+        FileUtils.rm_f(tmp_path)
       end
     end
   end

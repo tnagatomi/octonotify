@@ -36,8 +36,8 @@ RSpec.describe Octonotify::Config do
           expect(config.from).to eq("Octonotify <noreply@example.com>")
           expect(config.to).to eq(["user@example.com"])
           expect(config.repos).to eq({
-            "owner/repo" => { events: ["release", "pull_request_merged"] }
-          })
+                                       "owner/repo" => { events: %w[release pull_request_merged] }
+                                     })
         end
       end
 
@@ -77,9 +77,9 @@ RSpec.describe Octonotify::Config do
 
     context "with missing config file" do
       it "raises ConfigError" do
-        expect {
+        expect do
           described_class.load(config_path: "/nonexistent/config.yml")
-        }.to raise_error(Octonotify::ConfigError, /Config file not found/)
+        end.to raise_error(Octonotify::ConfigError, /Config file not found/)
       end
     end
 
@@ -97,9 +97,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /Invalid timezone/)
+          end.to raise_error(Octonotify::ConfigError, /Invalid timezone/)
         end
       end
     end
@@ -116,9 +116,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /'from' is required/)
+          end.to raise_error(Octonotify::ConfigError, /'from' is required/)
         end
       end
     end
@@ -135,9 +135,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
+          end.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
         end
       end
     end
@@ -155,9 +155,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
+          end.to raise_error(Octonotify::ConfigError, /'to' must have at least one recipient/)
         end
       end
     end
@@ -175,9 +175,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
+          end.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
         end
       end
     end
@@ -195,9 +195,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
+          end.to raise_error(Octonotify::ConfigError, /must not contain newlines/)
         end
       end
     end
@@ -215,9 +215,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /Invalid repo format.*must be 'owner\/repo'/)
+          end.to raise_error(Octonotify::ConfigError, %r{Invalid repo format.*must be 'owner/repo'})
         end
       end
     end
@@ -235,9 +235,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /invalid events.*invalid_event/)
+          end.to raise_error(Octonotify::ConfigError, /invalid events.*invalid_event/)
         end
       end
     end
@@ -252,9 +252,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /'repos' must be a mapping/)
+          end.to raise_error(Octonotify::ConfigError, /'repos' must be a mapping/)
         end
       end
     end
@@ -270,9 +270,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /Repo config must be a mapping/)
+          end.to raise_error(Octonotify::ConfigError, /Repo config must be a mapping/)
         end
       end
     end
@@ -289,9 +289,9 @@ RSpec.describe Octonotify::Config do
         YAML
 
         with_config_file(yaml) do |path|
-          expect {
+          expect do
             described_class.load(config_path: path)
-          }.to raise_error(Octonotify::ConfigError, /must have at least one event/)
+          end.to raise_error(Octonotify::ConfigError, /must have at least one event/)
         end
       end
     end

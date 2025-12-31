@@ -13,15 +13,15 @@ RSpec.describe Octonotify::GraphQLClient do
 
   describe "#initialize" do
     it "raises APIError when token is nil" do
-      expect {
+      expect do
         described_class.new(token: nil)
-      }.to raise_error(Octonotify::APIError, /GITHUB_TOKEN is required/)
+      end.to raise_error(Octonotify::APIError, /GITHUB_TOKEN is required/)
     end
 
     it "raises APIError when token is empty" do
-      expect {
+      expect do
         described_class.new(token: "")
-      }.to raise_error(Octonotify::APIError, /GITHUB_TOKEN is required/)
+      end.to raise_error(Octonotify::APIError, /GITHUB_TOKEN is required/)
     end
   end
 
@@ -239,9 +239,9 @@ RSpec.describe Octonotify::GraphQLClient do
 
       client = described_class.new(token: token, connection: build_test_connection(stubs))
 
-      expect {
+      expect do
         client.fetch_releases(owner: "owner", repo: "repo")
-      }.to raise_error(Octonotify::APIError, /GraphQL request failed: 500/)
+      end.to raise_error(Octonotify::APIError, /GraphQL request failed: 500/)
     end
 
     it "raises APIError on GraphQL errors" do
@@ -255,9 +255,9 @@ RSpec.describe Octonotify::GraphQLClient do
 
       client = described_class.new(token: token, connection: build_test_connection(stubs))
 
-      expect {
+      expect do
         client.fetch_releases(owner: "owner", repo: "repo")
-      }.to raise_error(Octonotify::APIError, /GraphQL errors: Repository not found/)
+      end.to raise_error(Octonotify::APIError, /GraphQL errors: Repository not found/)
     end
   end
 

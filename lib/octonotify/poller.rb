@@ -85,9 +85,7 @@ module Octonotify
         cursor = page_info["endCursor"]
       end
 
-      if new_watermark
-        @state.update_watermark(repo_name, event_type, new_watermark.iso8601)
-      end
+      @state.update_watermark(repo_name, event_type, new_watermark.iso8601) if new_watermark
 
       { events: events, rate_limit: rate_limit }
     end

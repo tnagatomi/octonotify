@@ -36,22 +36,22 @@ module Octonotify
 
       # Security: do not permit Symbols or aliases from YAML.
       # This config is intended to be plain scalars/arrays/hashes only.
-      raw = YAML.safe_load(File.read(@config_path), permitted_classes: [], permitted_symbols: [], aliases: false)
-      raise ConfigError, 'Config file is empty or invalid' if raw.nil?
+      raw = YAML.safe_load_file(@config_path, permitted_classes: [], permitted_symbols: [], aliases: false)
+      raise ConfigError, "Config file is empty or invalid" if raw.nil?
 
-      @timezone = (raw['timezone'] || DEFAULT_TIMEZONE).to_s.strip
-      @from = (raw['from'] || '').to_s.strip
-      @to = Array(raw['to']).compact.map(&:to_s).map(&:strip).reject(&:empty?)
-      @repos = parse_repos(raw['repos'] || {})
+      @timezone = (raw["timezone"] || DEFAULT_TIMEZONE).to_s.strip
+      @from = (raw["from"] || "").to_s.strip
+      @to = Array(raw["to"]).compact.map(&:to_s).map(&:strip).reject(&:empty?)
+      @repos = parse_repos(raw["repos"] || {})
     end
 
     def parse_repos(repos_hash)
       raise ConfigError, "'repos' must be a mapping (YAML hash)" unless repos_hash.is_a?(Hash)
 
       repos_hash.transform_keys(&:to_s).transform_values do |repo_config|
-        raise ConfigError, 'Repo config must be a mapping (YAML hash)' unless repo_config.is_a?(Hash)
+        raise ConfigError, "Repo config must be a mapping (YAML hash)" unless repo_config.is_a?(Hash)
 
-        events = Array(repo_config['events']).compact.map(&:to_s).map(&:strip).reject(&:empty?)
+        events = Array(repo_config["events"]).compact.map(&:to_s).map(&:strip).reject(&:empty?)
         { events: events }
       end
     end
@@ -72,13 +72,13 @@ module Octonotify
     def validate_from
       raise ConfigError, "'from' is required" if @from.nil? || @from.empty?
 
-      validate_header_value!(@from, field: 'from')
+      validate_header_value!(@from, field: "from")
     end
 
     def validate_to
       raise ConfigError, "'to' must have at least one recipient" if @to.empty?
 
-      @to.each { |recipient| validate_header_value!(recipient, field: 'to') }
+      @to.each { |recipient| validate_header_value!(recipient, field: "to") }
     end
 
     def validate_repos
@@ -102,8 +102,8 @@ module Octonotify
       invalid_events = events - VALID_EVENTS
       return if invalid_events.empty?
 
-      raise ConfigError, "Repo '#{repo_name}' has invalid events: #{invalid_events.join(', ')}. " \
-                         "Valid events are: #{VALID_EVENTS.join(', ')}"
+      raise ConfigError, "Repo '#{repo_name}' has invalid events: #{invalid_events.join(", ")}. " \
+                         "Valid events are: #{VALID_EVENTS.join(", ")}"
     end
 
     def validate_header_value!(value, field:)

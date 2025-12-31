@@ -160,15 +160,11 @@ module Octonotify
       body = { query: query, variables: variables }.to_json
       response = @connection.post("", body)
 
-      unless response.success?
-        raise APIError, "GraphQL request failed: #{response.status} #{response.body}"
-      end
+      raise APIError, "GraphQL request failed: #{response.status} #{response.body}" unless response.success?
 
       data = JSON.parse(response.body)
 
-      if data["errors"]
-        raise APIError, "GraphQL errors: #{data['errors'].map { |e| e['message'] }.join(', ')}"
-      end
+      raise APIError, "GraphQL errors: #{data["errors"].map { |e| e["message"] }.join(", ")}" if data["errors"]
 
       data["data"]
     end

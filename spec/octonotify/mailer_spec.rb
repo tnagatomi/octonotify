@@ -24,7 +24,7 @@ RSpec.describe Octonotify::Mailer do
 
   describe "#initialize" do
     around do |example|
-      original_host = ENV["SMTP_HOST"]
+      original_host = ENV.fetch("SMTP_HOST", nil)
       example.run
       ENV["SMTP_HOST"] = original_host
     end
@@ -32,18 +32,18 @@ RSpec.describe Octonotify::Mailer do
     context "when SMTP_HOST is not set" do
       it "raises ConfigError" do
         ENV.delete("SMTP_HOST")
-        expect {
+        expect do
           described_class.new(config: config)
-        }.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
+        end.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
       end
     end
 
     context "when SMTP_HOST is empty" do
       it "raises ConfigError" do
         ENV["SMTP_HOST"] = ""
-        expect {
+        expect do
           described_class.new(config: config)
-        }.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
+        end.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
       end
     end
 
@@ -56,8 +56,8 @@ RSpec.describe Octonotify::Mailer do
 
     context "when SMTP_USERNAME is set but SMTP_PASSWORD is missing" do
       around do |example|
-        original_username = ENV["SMTP_USERNAME"]
-        original_password = ENV["SMTP_PASSWORD"]
+        original_username = ENV.fetch("SMTP_USERNAME", nil)
+        original_password = ENV.fetch("SMTP_PASSWORD", nil)
         example.run
         ENV["SMTP_USERNAME"] = original_username
         ENV["SMTP_PASSWORD"] = original_password
@@ -67,18 +67,18 @@ RSpec.describe Octonotify::Mailer do
         ENV["SMTP_HOST"] = "smtp.example.com"
         ENV["SMTP_USERNAME"] = "user"
         ENV.delete("SMTP_PASSWORD")
-        expect {
+        expect do
           described_class.new(config: config)
-        }.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
+        end.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
       end
 
       it "raises ConfigError when password is empty" do
         ENV["SMTP_HOST"] = "smtp.example.com"
         ENV["SMTP_USERNAME"] = "user"
         ENV["SMTP_PASSWORD"] = ""
-        expect {
+        expect do
           described_class.new(config: config)
-        }.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
+        end.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
       end
     end
   end
@@ -94,7 +94,7 @@ RSpec.describe Octonotify::Mailer do
       author: nil,
       extra: { tag_name: "v1.0.0" }
     }
-    Octonotify::Poller::Event.new(**defaults.merge(attrs))
+    Octonotify::Poller::Event.new(**defaults, **attrs)
   end
 
   describe "#send_digest" do
@@ -287,15 +287,14 @@ RSpec.describe Octonotify::Mailer do
           raise StandardError, "SMTP error" if call_count == 1
         end
 
-        expect {
-          failing_mailer.send_digest([build_event])
-        }.to raise_error(Octonotify::Mailer::DeliveryError) do |error|
-          expect(error.failed_recipients.size).to eq(1)
-          expect(error.failed_recipients.keys.first).to eq("user1@example.com")
-          # Verify error message does not contain email addresses (PII protection)
-          expect(error.message).to eq("Failed to deliver to 1 recipient(s)")
-          expect(error.message).not_to include("@")
-        end
+        expect { failing_mailer.send_digest([build_event]) }
+          .to raise_error(Octonotify::Mailer::DeliveryError) do |error|
+            expect(error.failed_recipients.size).to eq(1)
+            expect(error.failed_recipients.keys.first).to eq("user1@example.com")
+            # Verify error message does not contain email addresses (PII protection)
+            expect(error.message).to eq("Failed to deliver to 1 recipient(s)")
+            expect(error.message).not_to include("@")
+          end
       end
     end
 
