@@ -45,8 +45,8 @@ module Octonotify
 
       smtp_settings = {
         address: host,
-        port: ENV.fetch("OCTONOTIFY_SMTP_PORT", 587).to_i,
-        enable_starttls: true
+        port: parse_smtp_port(ENV.fetch("OCTONOTIFY_SMTP_PORT", nil)),
+        enable_starttls_auto: true
       }
 
       if username && !username.empty?
@@ -60,6 +60,18 @@ module Octonotify
       end
 
       [:smtp, smtp_settings]
+    end
+
+    def parse_smtp_port(value)
+      str = value.to_s.strip
+      return 587 if str.empty?
+
+      port = Integer(str, 10)
+      return port if port.between?(1, 65_535)
+
+      raise Octonotify::ConfigError, "OCTONOTIFY_SMTP_PORT must be a valid TCP port (1-65535)"
+    rescue ArgumentError
+      raise Octonotify::ConfigError, "OCTONOTIFY_SMTP_PORT must be a valid TCP port (1-65535)"
     end
 
     def send_email(to:, subject:, body:)

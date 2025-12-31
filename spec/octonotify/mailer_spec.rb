@@ -25,8 +25,14 @@ RSpec.describe Octonotify::Mailer do
   describe "#initialize" do
     around do |example|
       original_host = ENV.fetch("OCTONOTIFY_SMTP_HOST", nil)
+      original_port = ENV.fetch("OCTONOTIFY_SMTP_PORT", nil)
       example.run
       ENV["OCTONOTIFY_SMTP_HOST"] = original_host
+      if original_port.nil?
+        ENV.delete("OCTONOTIFY_SMTP_PORT")
+      else
+        ENV["OCTONOTIFY_SMTP_PORT"] = original_port
+      end
     end
 
     context "when OCTONOTIFY_SMTP_HOST is not set" do
@@ -51,6 +57,50 @@ RSpec.describe Octonotify::Mailer do
       it "creates mailer successfully" do
         ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
         expect { described_class.new(config: config) }.not_to raise_error
+      end
+    end
+
+    context "when OCTONOTIFY_SMTP_PORT is not set" do
+      it "defaults to 587" do
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV.delete("OCTONOTIFY_SMTP_PORT")
+
+        mailer = described_class.new(config: config)
+        delivery = mailer.instance_variable_get(:@delivery_method)
+        expect(delivery).to be_a(Array)
+        expect(delivery[0]).to eq(:smtp)
+        expect(delivery[1][:port]).to eq(587)
+      end
+    end
+
+    context "when OCTONOTIFY_SMTP_PORT is empty" do
+      it "defaults to 587 (GitHub Actions secret not set results in empty string)" do
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_PORT"] = ""
+
+        mailer = described_class.new(config: config)
+        delivery = mailer.instance_variable_get(:@delivery_method)
+        expect(delivery[1][:port]).to eq(587)
+      end
+    end
+
+    context "when OCTONOTIFY_SMTP_PORT is invalid" do
+      it "raises ConfigError for non-numeric port" do
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_PORT"] = "not-a-number"
+
+        expect do
+          described_class.new(config: config)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_PORT must be a valid TCP port/)
+      end
+
+      it "raises ConfigError for out-of-range port" do
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_PORT"] = "70000"
+
+        expect do
+          described_class.new(config: config)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_PORT must be a valid TCP port/)
       end
     end
 
