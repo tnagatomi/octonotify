@@ -1,0 +1,102 @@
+# Octonotify
+
+A GitHub Actions-based tool that monitors GitHub repository events and sends email notifications.
+
+Currently supported events:
+
+- Release
+- PR created
+- PR merged
+- Issue created.
+
+## Setup
+
+### 1. Fork this repository
+
+Fork this repository to your own GitHub account.
+
+### 2. Configure Secrets
+
+Go to your forked repository's Settings → Secrets and variables → Actions and configure the following secrets:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `SMTP_HOST` | SMTP server hostname | `smtp.gmail.com` |
+| `SMTP_PORT` | SMTP server port | `587` |
+| `SMTP_USERNAME` | SMTP authentication username | `your-email@example.com` |
+| `SMTP_PASSWORD` | SMTP authentication password | App password for Gmail |
+| `GITHUB_TOKEN` | (Optional) GitHub token (PAT) to monitor private repositories or increase rate limits. If not set, tthe default GitHub Actions token (`github.token`) is used. | `ghp_...` |
+
+#### Using Gmail
+
+1. Enable [2-Step Verification](https://myaccount.google.com/security) on your Google account
+2. Generate an [App Password](https://myaccount.google.com/apppasswords)
+3. Use the generated app password as `SMTP_PASSWORD`
+
+### 3. Create configuration file
+
+Copy `.octonotify/config.yml.example` to `.octonotify/config.yml` and configure the repositories and events you want to monitor and notification recipients.
+
+### 4. Commit and push changes
+
+```bash
+git add .octonotify/config.yml
+git commit -m "Configure Octonotify"
+git push
+```
+
+### 5. Enable Actions
+
+Go to the Actions tab in your forked repository and enable the workflow.
+
+## Configuration Options
+
+### config.yml
+
+| Key | Required | Description | Default |
+|-----|----------|-------------|---------|
+| `timezone` | No | Timezone for email display (IANA format) | `UTC` |
+| `from` | Yes | Sender email address | - |
+| `to` | Yes | Recipient email addresses (array) | - |
+| `repos` | Yes | Repository monitoring configuration | - |
+
+### Event Types
+
+| Event | Description |
+|-------|-------------|
+| `release` | When a release is published |
+| `pull_request_created` | When a PR is created |
+| `pull_request_merged` | When a PR is merged |
+| `issue_created` | When an issue is created (excludes PRs) |
+
+For concrete examples, see `.octonotify/config.yml.example`.
+
+## Operations
+
+### Execution Schedule
+
+By default, the workflow runs every 5 minutes. You can modify the schedule in `.github/workflows/octonotify.yml`.
+
+### Manual Execution
+
+You can manually trigger the workflow from the Actions tab using "Run workflow".
+
+### State File
+
+`.octonotify/state.json` stores the following information:
+
+- Last execution timestamp
+- Watermark for processed events per repository
+- Notified event IDs (for duplicate prevention)
+
+The state file is automatically updated by Actions. Do not edit it manually.
+
+Note: The workflow commits and pushes `.octonotify/state.json` back to your fork to persist state between runs. If you have branch protection rules enabled, you may need to allow GitHub Actions to push to the branch or adjust the workflow/branch protection settings.
+
+### Rate Limiting
+
+If the GitHub API rate limit is reached, processing will be interrupted but will resume from where it left off on the next run. The interruption position is saved in the state file.
+
+## License
+
+MIT License
