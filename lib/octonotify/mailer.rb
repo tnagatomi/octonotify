@@ -37,21 +37,21 @@ module Octonotify
     private
 
     def build_smtp_delivery
-      host = ENV.fetch("SMTP_HOST", nil)
-      raise Octonotify::ConfigError, "SMTP_HOST environment variable is required" if host.nil? || host.empty?
+      host = ENV.fetch("OCTONOTIFY_SMTP_HOST", nil)
+      raise Octonotify::ConfigError, "OCTONOTIFY_SMTP_HOST environment variable is required" if host.nil? || host.empty?
 
-      username = ENV.fetch("SMTP_USERNAME", nil)
-      password = ENV.fetch("SMTP_PASSWORD", nil)
+      username = ENV.fetch("OCTONOTIFY_SMTP_USERNAME", nil)
+      password = ENV.fetch("OCTONOTIFY_SMTP_PASSWORD", nil)
 
       smtp_settings = {
         address: host,
-        port: ENV.fetch("SMTP_PORT", 587).to_i,
+        port: ENV.fetch("OCTONOTIFY_SMTP_PORT", 587).to_i,
         enable_starttls: true
       }
 
       if username && !username.empty?
         if password.nil? || password.empty?
-          raise Octonotify::ConfigError, "SMTP_PASSWORD is required when SMTP_USERNAME is set"
+          raise Octonotify::ConfigError, "OCTONOTIFY_SMTP_PASSWORD is required when OCTONOTIFY_SMTP_USERNAME is set"
         end
 
         smtp_settings[:user_name] = username

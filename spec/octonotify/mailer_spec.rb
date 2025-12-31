@@ -24,61 +24,61 @@ RSpec.describe Octonotify::Mailer do
 
   describe "#initialize" do
     around do |example|
-      original_host = ENV.fetch("SMTP_HOST", nil)
+      original_host = ENV.fetch("OCTONOTIFY_SMTP_HOST", nil)
       example.run
-      ENV["SMTP_HOST"] = original_host
+      ENV["OCTONOTIFY_SMTP_HOST"] = original_host
     end
 
-    context "when SMTP_HOST is not set" do
+    context "when OCTONOTIFY_SMTP_HOST is not set" do
       it "raises ConfigError" do
-        ENV.delete("SMTP_HOST")
+        ENV.delete("OCTONOTIFY_SMTP_HOST")
         expect do
           described_class.new(config: config)
-        end.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_HOST environment variable is required/)
       end
     end
 
-    context "when SMTP_HOST is empty" do
+    context "when OCTONOTIFY_SMTP_HOST is empty" do
       it "raises ConfigError" do
-        ENV["SMTP_HOST"] = ""
+        ENV["OCTONOTIFY_SMTP_HOST"] = ""
         expect do
           described_class.new(config: config)
-        end.to raise_error(Octonotify::ConfigError, /SMTP_HOST environment variable is required/)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_HOST environment variable is required/)
       end
     end
 
-    context "when SMTP_HOST is set" do
+    context "when OCTONOTIFY_SMTP_HOST is set" do
       it "creates mailer successfully" do
-        ENV["SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
         expect { described_class.new(config: config) }.not_to raise_error
       end
     end
 
-    context "when SMTP_USERNAME is set but SMTP_PASSWORD is missing" do
+    context "when OCTONOTIFY_SMTP_USERNAME is set but OCTONOTIFY_SMTP_PASSWORD is missing" do
       around do |example|
-        original_username = ENV.fetch("SMTP_USERNAME", nil)
-        original_password = ENV.fetch("SMTP_PASSWORD", nil)
+        original_username = ENV.fetch("OCTONOTIFY_SMTP_USERNAME", nil)
+        original_password = ENV.fetch("OCTONOTIFY_SMTP_PASSWORD", nil)
         example.run
-        ENV["SMTP_USERNAME"] = original_username
-        ENV["SMTP_PASSWORD"] = original_password
+        ENV["OCTONOTIFY_SMTP_USERNAME"] = original_username
+        ENV["OCTONOTIFY_SMTP_PASSWORD"] = original_password
       end
 
       it "raises ConfigError" do
-        ENV["SMTP_HOST"] = "smtp.example.com"
-        ENV["SMTP_USERNAME"] = "user"
-        ENV.delete("SMTP_PASSWORD")
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_USERNAME"] = "user"
+        ENV.delete("OCTONOTIFY_SMTP_PASSWORD")
         expect do
           described_class.new(config: config)
-        end.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_PASSWORD is required/)
       end
 
       it "raises ConfigError when password is empty" do
-        ENV["SMTP_HOST"] = "smtp.example.com"
-        ENV["SMTP_USERNAME"] = "user"
-        ENV["SMTP_PASSWORD"] = ""
+        ENV["OCTONOTIFY_SMTP_HOST"] = "smtp.example.com"
+        ENV["OCTONOTIFY_SMTP_USERNAME"] = "user"
+        ENV["OCTONOTIFY_SMTP_PASSWORD"] = ""
         expect do
           described_class.new(config: config)
-        end.to raise_error(Octonotify::ConfigError, /SMTP_PASSWORD is required when SMTP_USERNAME is set/)
+        end.to raise_error(Octonotify::ConfigError, /OCTONOTIFY_SMTP_PASSWORD is required/)
       end
     end
   end
