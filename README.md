@@ -25,7 +25,11 @@ Go to your forked repository's Settings → Secrets and variables → Actions an
 | `SMTP_PORT` | SMTP server port | `587` |
 | `SMTP_USERNAME` | SMTP authentication username | `your-email@example.com` |
 | `SMTP_PASSWORD` | SMTP authentication password | App password for Gmail |
-| `GITHUB_TOKEN` | (Optional) GitHub token (PAT) to monitor private repositories or increase rate limits. If not set, the default GitHub Actions token (`github.token`) is used. | `ghp_...` |
+| `GITHUB_TOKEN` | GitHub token. In GitHub Actions, the workflow uses the default token (`github.token`) automatically. Set this secret only if you need a PAT (e.g., to monitor private repositories or increase rate limits). | `ghp_...` |
+
+Notes:
+
+- `.octonotify/config.yml` contains recipient email addresses. Consider keeping your fork private if you don't want to publish them.
 
 #### Using Gmail
 
