@@ -1,9 +1,9 @@
 name: Octonotify
 
 on:
-  schedule:
-    # Run every 5 minutes
-    - cron: '*/5 * * * *'
+  # Disabled by default since setup is needed before running. Uncomment to enable.
+  # schedule:
+  #   - cron: '*/5 * * * *'
   workflow_dispatch:
 
 # Prevent concurrent executions to avoid state conflicts

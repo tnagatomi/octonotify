@@ -51,6 +51,11 @@ git push
 
 Go to the Actions tab in your forked repository and enable the workflow.
 
+### 6. Enable the schedule
+
+The scheduled trigger is commented out by default to avoid failures right after forking.
+After you finish setup (secrets and `.octonotify/config.yml`), uncomment the `schedule` block in `.github/workflows/octonotify.yml` to enable cron.
+
 ## Configuration Options
 
 ### config.yml
@@ -75,7 +80,8 @@ For concrete examples, see `.octonotify/config.yml.example`.
 
 ### Execution Schedule
 
-By default, the workflow runs every 5 minutes. You can modify the schedule in `.github/workflows/octonotify.yml`.
+By default, the scheduled trigger (every 5 minutes) is commented out to prevent failures on new forks.
+Once setup is complete, uncomment the `schedule` block in `.github/workflows/octonotify.yml` to enable the cron trigger.
 
 ### Manual Execution
 
