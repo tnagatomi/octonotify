@@ -39,22 +39,22 @@ Go to your forked repository's Settings → Secrets and variables → Actions an
 
 Copy `.octonotify/config.yml.example` to `.octonotify/config.yml` and configure the repositories and events you want to monitor.
 
-### 4. Commit and push changes
+### 4. Enable GitHub Actions
 
-```bash
-git add .octonotify/config.yml
-git commit -m "Configure Octonotify"
-git push
-```
+Go to the Actions tab in your forked repository and enable workflows if they are disabled.
 
-### 5. Enable Actions
-
-Go to the Actions tab in your forked repository and enable the workflow.
-
-### 6. Enable the schedule
+### 5. Enable the schedule
 
 The scheduled trigger is commented out by default to avoid failures right after forking.
 After you finish setup (secrets and `.octonotify/config.yml`), uncomment the `schedule` block in `.github/workflows/octonotify.yml` to enable cron.
+
+### 6. Commit and push changes
+
+```bash
+git add .octonotify/config.yml .github/workflows/octonotify.yml
+git commit -m "Configure Octonotify"
+git push
+```
 
 ## Configuration Options
 
@@ -85,7 +85,7 @@ Once setup is complete, uncomment the `schedule` block in `.github/workflows/oct
 
 ### Manual Execution
 
-You can manually trigger the workflow from the Actions tab using "Run workflow".
+Optional: You can manually trigger the workflow from the Actions tab using "Run workflow".
 
 ### State File
 
