@@ -33,7 +33,7 @@ Go to your forked repository's Settings → Secrets and variables → Actions an
 
 1. Enable [2-Step Verification](https://myaccount.google.com/security) on your Google account
 2. Generate an [App Password](https://myaccount.google.com/apppasswords)
-3. Use the generated app password as `SMTP_PASSWORD`
+3. Use the generated app password as `OCTONOTIFY_SMTP_PASSWORD`
 
 ### 3. Create configuration file
 
