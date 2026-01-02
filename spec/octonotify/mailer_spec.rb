@@ -180,24 +180,57 @@ RSpec.describe Octonotify::Mailer do
         expect(mail.subject).to eq("[Octonotify] 1 new event in owner/repo")
       end
 
-      it "includes event details in body" do
+      it "sends multipart email with text and html parts" do
         mailer.send_digest([build_event])
 
         mail = Mail::TestMailer.deliveries.first
-        body = mail.body.to_s
+        expect(mail.parts.size).to eq(2)
+        expect(mail.text_part).not_to be_nil
+        expect(mail.html_part).not_to be_nil
+      end
 
-        expect(body).to include("## owner/repo")
+      it "includes event details in text part" do
+        mailer.send_digest([build_event])
+
+        mail = Mail::TestMailer.deliveries.first
+        body = mail.text_part.body.to_s
+
+        expect(body).to include("owner/repo")
         expect(body).to include("https://github.com/owner/repo")
-        expect(body).to include("[Release] v1.0.0")
+        expect(body).to include("Release")
+        expect(body).to include("v1.0.0")
         expect(body).to include("https://github.com/owner/repo/releases/tag/v1.0.0")
         expect(body).to include("Tag: v1.0.0")
+      end
+
+      it "includes styled repo heading in html part" do
+        mailer.send_digest([build_event])
+
+        mail = Mail::TestMailer.deliveries.first
+        body = mail.html_part.body.to_s
+
+        expect(body).to include("font-weight: bold")
+        expect(body).to include("owner/repo")
+        expect(body).to include("<h3")
+        expect(body).to include("Release")
+        expect(body).to include("v1.0.0")
+      end
+
+      it "does not include separator lines in text part" do
+        mailer.send_digest([build_event])
+
+        mail = Mail::TestMailer.deliveries.first
+        body = mail.text_part.body.to_s
+
+        expect(body).not_to include("=" * 50)
+        expect(body).not_to include("-" * 50)
       end
 
       it "converts time to configured timezone" do
         mailer.send_digest([build_event(time: Time.utc(2024, 1, 15, 12, 0, 0))])
 
         mail = Mail::TestMailer.deliveries.first
-        body = mail.body.to_s
+        body = mail.text_part.body.to_s
 
         # UTC 12:00 -> JST 21:00
         expect(body).to include("2024-01-15 21:00")
@@ -237,17 +270,17 @@ RSpec.describe Octonotify::Mailer do
         mailer.send_digest(events)
 
         mail = Mail::TestMailer.deliveries.first
-        body = mail.body.to_s
+        body = mail.text_part.body.to_s
 
-        expect(body).to include("## owner/repo1")
-        expect(body).to include("## owner/repo2")
+        expect(body).to include("owner/repo1")
+        expect(body).to include("owner/repo2")
         expect(body).to include("Release 1")
         expect(body).to include("Release 2")
       end
     end
 
     context "with different event types" do
-      it "formats release event correctly" do
+      it "formats release event with type heading" do
         event = build_event(
           type: "release",
           title: "v1.0.0",
@@ -255,12 +288,12 @@ RSpec.describe Octonotify::Mailer do
         )
         mailer.send_digest([event])
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
-        expect(body).to include("[Release]")
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        expect(body).to include("  Release")
         expect(body).to include("Tag: v1.0.0")
       end
 
-      it "formats pull_request_merged event correctly" do
+      it "formats pull_request_merged event with type heading" do
         event = build_event(
           type: "pull_request_merged",
           title: "Fix bug",
@@ -269,13 +302,13 @@ RSpec.describe Octonotify::Mailer do
         )
         mailer.send_digest([event])
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
-        expect(body).to include("[PR Merged]")
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        expect(body).to include("  PR Merged")
         expect(body).to include("Author: alice")
         expect(body).to include("Merged by: bob")
       end
 
-      it "formats pull_request_created event correctly" do
+      it "formats pull_request_created event with type heading" do
         event = build_event(
           type: "pull_request_created",
           title: "Add feature",
@@ -284,12 +317,12 @@ RSpec.describe Octonotify::Mailer do
         )
         mailer.send_digest([event])
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
-        expect(body).to include("[PR Created]")
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        expect(body).to include("  PR Created")
         expect(body).to include("Author: charlie")
       end
 
-      it "formats issue_created event correctly" do
+      it "formats issue_created event with type heading" do
         event = build_event(
           type: "issue_created",
           title: "Bug report",
@@ -298,8 +331,8 @@ RSpec.describe Octonotify::Mailer do
         )
         mailer.send_digest([event])
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
-        expect(body).to include("[Issue Created]")
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        expect(body).to include("  Issue Created")
         expect(body).to include("Author: dave")
       end
     end
@@ -356,9 +389,9 @@ RSpec.describe Octonotify::Mailer do
         ]
         mailer.send_digest(events)
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
-        alpha_pos = body.index("## alpha/repo")
-        zeta_pos = body.index("## zeta/repo")
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        alpha_pos = body.index("alpha/repo")
+        zeta_pos = body.index("zeta/repo")
         expect(alpha_pos).to be < zeta_pos
       end
 
@@ -369,10 +402,171 @@ RSpec.describe Octonotify::Mailer do
         ]
         mailer.send_digest(events)
 
-        body = Mail::TestMailer.deliveries.first.body.to_s
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
         newer_pos = body.index("Newer")
         older_pos = body.index("Older")
         expect(newer_pos).to be < older_pos
+      end
+    end
+
+    context "with charset encoding" do
+      it "sets UTF-8 charset on text part" do
+        mailer.send_digest([build_event])
+
+        mail = Mail::TestMailer.deliveries.first
+        expect(mail.text_part.content_type).to include("charset=UTF-8")
+      end
+
+      it "sets UTF-8 charset on html part" do
+        mailer.send_digest([build_event])
+
+        mail = Mail::TestMailer.deliveries.first
+        expect(mail.html_part.content_type).to include("charset=UTF-8")
+      end
+    end
+
+    context "with event type grouping" do
+      it "groups events by type within repo with type as heading" do
+        events = [
+          build_event(type: "release", id: "RE_1", title: "v1.0.0"),
+          build_event(type: "pull_request_merged", id: "PR_1", title: "Fix bug", extra: {}),
+          build_event(type: "release", id: "RE_2", title: "v2.0.0")
+        ]
+        mailer.send_digest(events)
+
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        # Release heading appears once, before release events
+        release_heading_pos = body.index("  Release\n")
+        v1_pos = body.index("v1.0.0")
+        v2_pos = body.index("v2.0.0")
+        pr_heading_pos = body.index("  PR Merged\n")
+
+        expect(release_heading_pos).to be < v1_pos
+        expect(release_heading_pos).to be < v2_pos
+        expect(pr_heading_pos).to be > v2_pos
+      end
+
+      it "shows type heading only once per type in html" do
+        events = [
+          build_event(type: "release", id: "RE_1", title: "v1.0.0"),
+          build_event(type: "release", id: "RE_2", title: "v2.0.0")
+        ]
+        mailer.send_digest(events)
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        # Only one Release heading in HTML
+        expect(body.scan("<h3").count).to eq(1)
+        expect(body).to include("Release")
+      end
+
+      it "adds a blank line between events within the same type in text" do
+        events = [
+          build_event(
+            type: "release",
+            id: "RE_1",
+            title: "v1.0.0",
+            url: "https://github.com/owner/repo/releases/tag/v1.0.0",
+            time: Time.utc(2024, 1, 15, 11, 0, 0),
+            extra: { tag_name: "v1.0.0" }
+          ),
+          build_event(
+            type: "release",
+            id: "RE_2",
+            title: "v2.0.0",
+            url: "https://github.com/owner/repo/releases/tag/v2.0.0",
+            time: Time.utc(2024, 1, 15, 12, 0, 0),
+            extra: { tag_name: "v2.0.0" }
+          )
+        ]
+        mailer.send_digest(events)
+
+        body = Mail::TestMailer.deliveries.first.text_part.body.to_s
+        # Events are listed newest-first; ensure there's a blank line between event blocks.
+        expect(body).to include("Tag: v2.0.0\n\n    v1.0.0")
+      end
+
+      it "adds spacing between events within the same type in html" do
+        events = [
+          build_event(
+            type: "release",
+            id: "RE_1",
+            title: "v1.0.0",
+            url: "https://github.com/owner/repo/releases/tag/v1.0.0",
+            time: Time.utc(2024, 1, 15, 11, 0, 0),
+            extra: { tag_name: "v1.0.0" }
+          ),
+          build_event(
+            type: "release",
+            id: "RE_2",
+            title: "v2.0.0",
+            url: "https://github.com/owner/repo/releases/tag/v2.0.0",
+            time: Time.utc(2024, 1, 15, 12, 0, 0),
+            extra: { tag_name: "v2.0.0" }
+          )
+        ]
+        mailer.send_digest(events)
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).to include("<div style=\"height: 8px;\"></div>")
+      end
+    end
+
+    context "with HTML escaping" do
+      it "escapes special characters in event title" do
+        event = build_event(title: "<script>alert('xss')</script>")
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).not_to include("<script>")
+        expect(body).to include("&lt;script&gt;")
+      end
+
+      it "escapes special characters in author name" do
+        event = build_event(
+          type: "pull_request_created",
+          author: "<b>attacker</b>",
+          extra: {}
+        )
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).not_to include("<b>attacker</b>")
+        expect(body).to include("&lt;b&gt;attacker&lt;/b&gt;")
+      end
+    end
+
+    context "with dangerous URLs" do
+      it "does not create link for javascript: URL" do
+        event = build_event(url: "javascript:alert('xss')")
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).not_to include("href=\"javascript:")
+        expect(body).to include("javascript:alert")
+      end
+
+      it "does not create link for data: URL" do
+        event = build_event(url: "data:text/html,<script>alert('xss')</script>")
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).not_to include("href=\"data:")
+      end
+
+      it "creates link for https URL" do
+        event = build_event(url: "https://github.com/owner/repo")
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).to include("href=\"https://github.com/owner/repo\"")
+      end
+
+      it "creates link for http URL" do
+        event = build_event(url: "http://example.com/path")
+        mailer.send_digest([event])
+
+        body = Mail::TestMailer.deliveries.first.html_part.body.to_s
+        expect(body).to include("href=\"http://example.com/path\"")
       end
     end
   end
