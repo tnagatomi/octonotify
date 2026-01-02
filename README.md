@@ -11,7 +11,7 @@ Currently supported events:
 - Release
 - PR created
 - PR merged
-- Issue created.
+- Issue created
 
 ## Setup
 
