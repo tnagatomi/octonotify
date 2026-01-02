@@ -2,6 +2,10 @@
 
 A GitHub Actions-based tool that monitors GitHub repository events and sends email notifications.
 
+> [!NOTE]
+> Octonotify is **not** a real-time notifier. It periodically polls GitHub on a schedule (e.g., every 5 minutes) and sends a digest email.
+> The GitHub Actions `schedule` trigger is best-effort and may be delayed or skipped during periods of high load. See: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+
 Currently supported events:
 
 - Release
