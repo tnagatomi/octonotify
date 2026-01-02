@@ -13,6 +13,14 @@ Currently supported events:
 - PR merged
 - Issue created
 
+## Motivation
+
+GitHub's built-in notifications are convenient, but they often mean you end up following *all subsequent comments* after an Issue/PR is created.
+That can lead to unwanted noise: you either keep getting updates on threads you're not interested in, or you have to turn notifications off for that Issue/PR.
+
+Octonotify lets you **filter by event type** (e.g., "Issue created", "PR merged") and receive a digest email.
+If you later decide you want to follow a specific Issue/PR thread, you can jump to it from the email and subscribe there.
+
 ## Setup
 
 ### 1. Fork this repository
