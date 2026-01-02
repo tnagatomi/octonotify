@@ -43,10 +43,15 @@ module Octonotify
 
     def poll_event(owner:, repo:, event_type:)
       repo_name = "#{owner}/#{repo}"
-      event_state = peek_event_state(repo_name, event_type)
+      event_state = @state.event_state(repo_name, event_type)
       cursor = event_state["resume_cursor"]
+      current_watermark = Time.parse(event_state["watermark_time"])
+      baseline = Time.parse(event_state["baseline_time"])
 
-      threshold = calculate_threshold(event_state["watermark_time"])
+      threshold = calculate_threshold(
+        watermark_time: event_state["watermark_time"],
+        baseline_time: event_state["baseline_time"]
+      )
       events = []
       new_watermark = nil
       rate_limit = nil
@@ -64,14 +69,13 @@ module Octonotify
         nodes.each do |node|
           event_time = parse_event_time(node, event_type)
           next if event_time.nil?
-
-          new_watermark = event_time if new_watermark.nil? || event_time > new_watermark
-
           break if event_time < threshold
+
+          # Only update watermark for events at or after threshold
+          new_watermark = event_time if new_watermark.nil? || event_time > new_watermark
 
           event = build_event(node, event_type, repo_name)
           next if notified?(repo_name, event_type, event.id)
-          next unless @state.should_notify?(event_time)
           next if seen_ids[event.id]
 
           events << event
@@ -96,11 +100,12 @@ module Octonotify
         cursor = page_info["endCursor"]
       end
 
-      if new_watermark
+      # Clamp watermark: never regress below baseline or current watermark
+      if new_watermark && new_watermark > current_watermark
         state_changes[:watermarks] << {
           repo: repo_name,
           event_type: event_type,
-          watermark_time: new_watermark.iso8601
+          watermark_time: [new_watermark, baseline].max.iso8601
         }
       end
 
@@ -136,8 +141,10 @@ module Octonotify
       }
     end
 
-    def calculate_threshold(watermark_time)
-      Time.parse(watermark_time) - LOOKBACK_WINDOW
+    def calculate_threshold(watermark_time:, baseline_time:)
+      watermark_with_lookback = Time.parse(watermark_time) - LOOKBACK_WINDOW
+      baseline = Time.parse(baseline_time)
+      [watermark_with_lookback, baseline].max
     end
 
     def parse_event_time(node, event_type)
@@ -187,22 +194,8 @@ module Octonotify
       into[:resume_cursors].concat(other[:resume_cursors] || [])
     end
 
-    def peek_event_state(repo_name, event_type)
-      existing = @state.repos.dig(repo_name, "events", event_type)
-      return existing if existing
-
-      {
-        "watermark_time" => @state.notify_after,
-        "resume_cursor" => nil,
-        "recent_notified_ids" => [],
-        "incomplete" => false,
-        "reason" => nil
-      }
-    end
-
     def notified?(repo_name, event_type, id)
-      ids = @state.repos.dig(repo_name, "events", event_type, "recent_notified_ids") || []
-      ids.include?(id)
+      @state.event_state(repo_name, event_type)["recent_notified_ids"].include?(id)
     end
   end
 end

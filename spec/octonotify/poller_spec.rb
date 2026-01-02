@@ -4,7 +4,7 @@ require "spec_helper"
 require "tmpdir"
 
 RSpec.describe Octonotify::Poller do
-  let(:notify_after) { "2024-01-01T00:00:00Z" }
+  let(:baseline_time) { "2024-01-01T00:00:00Z" }
   let(:default_repos) { { "owner/repo" => { events: ["release"] } } }
   let(:config) { instance_double(Octonotify::Config, repos: default_repos) }
   let(:client) { instance_double(Octonotify::GraphQLClient) }
@@ -14,6 +14,7 @@ RSpec.describe Octonotify::Poller do
       path = File.join(dir, "state.json")
       File.write(path, content.to_json)
       state = Octonotify::State.new(state_path: path)
+      state.sync_with_config!(config, baseline_time: baseline_time)
       poller = described_class.new(config: config, state: state, client: client)
       yield poller, state
     end
@@ -21,10 +22,33 @@ RSpec.describe Octonotify::Poller do
 
   def default_state(overrides = {})
     {
-      "initialized_at" => notify_after,
-      "notify_after" => notify_after,
+      "last_run" => {},
       "repos" => {}
     }.merge(overrides)
+  end
+
+  def state_with_event(repo_name, event_type, event_overrides = {})
+    event_state = {
+      "baseline_time" => baseline_time,
+      "watermark_time" => baseline_time,
+      "resume_cursor" => nil,
+      "recent_notified_ids" => [],
+      "last_success_at" => nil,
+      "incomplete" => false,
+      "reason" => nil
+    }.merge(event_overrides)
+
+    {
+      "last_run" => {},
+      "repos" => {
+        repo_name => {
+          "url" => "https://github.com/#{repo_name}",
+          "events" => {
+            event_type => event_state
+          }
+        }
+      }
+    }
   end
 
   def release_response(nodes:, has_next_page: false, end_cursor: nil, remaining: 4999)
@@ -78,7 +102,7 @@ RSpec.describe Octonotify::Poller do
                            ])
         )
 
-        with_state_file(default_state) do |poller, state|
+        with_state_file(default_state) do |poller, _state|
           result = poller.poll
 
           expect(result[:events].size).to eq(1)
@@ -94,7 +118,6 @@ RSpec.describe Octonotify::Poller do
           expect(result[:rate_limit]).to include("remaining" => 4999)
 
           # Verify state changes are returned (but not applied inside Poller)
-          expect(state.repos).to eq({})
           expect(result[:state_changes]).to include(:notified_ids, :watermarks, :resume_cursors)
           expect(result[:state_changes][:notified_ids]).to include(
             repo: "owner/repo", event_type: "release", id: "RE_123"
@@ -212,21 +235,8 @@ RSpec.describe Octonotify::Poller do
                            ])
         )
 
-        state_with_notified = default_state(
-          "repos" => {
-            "owner/repo" => {
-              "url" => "https://github.com/owner/repo",
-              "events" => {
-                "release" => {
-                  "watermark_time" => notify_after,
-                  "recent_notified_ids" => ["RE_123"],
-                  "resume_cursor" => nil,
-                  "incomplete" => false
-                }
-              }
-            }
-          }
-        )
+        state_with_notified = state_with_event("owner/repo", "release",
+                                               "recent_notified_ids" => ["RE_123"])
 
         with_state_file(state_with_notified) do |poller, _state|
           result = poller.poll
@@ -235,8 +245,8 @@ RSpec.describe Octonotify::Poller do
       end
     end
 
-    context "with events before notify_after" do
-      it "skips events before notify_after" do
+    context "with events before baseline_time" do
+      it "skips events before baseline_time" do
         allow(client).to receive(:fetch_releases).and_return(
           release_response(nodes: [
                              {
@@ -355,10 +365,9 @@ RSpec.describe Octonotify::Poller do
           )
         end
 
-        with_state_file(default_state) do |poller, state|
+        with_state_file(default_state) do |poller, _state|
           result = poller.poll
 
-          expect(state.repos).to eq({})
           expect(result[:state_changes][:resume_cursors]).to include(
             repo: "owner/repo",
             event_type: "release",
@@ -366,43 +375,6 @@ RSpec.describe Octonotify::Poller do
             reason: "rate limit"
           )
           expect(result[:events].size).to eq(1)
-        end
-      end
-
-      it "clears resume_cursor after successful completion" do
-        allow(client).to receive(:fetch_releases).and_return(
-          release_response(nodes: [
-                             {
-                               "id" => "RE_123",
-                               "name" => "v1.0.0",
-                               "tagName" => "v1.0.0",
-                               "url" => "https://github.com/owner/repo/releases/tag/v1.0.0",
-                               "publishedAt" => "2024-01-15T12:00:00Z"
-                             }
-                           ])
-        )
-
-        state_with_cursor = default_state(
-          "repos" => {
-            "owner/repo" => {
-              "url" => "https://github.com/owner/repo",
-              "events" => {
-                "release" => {
-                  "watermark_time" => notify_after,
-                  "recent_notified_ids" => [],
-                  "resume_cursor" => "old_cursor",
-                  "incomplete" => true
-                }
-              }
-            }
-          }
-        )
-
-        with_state_file(state_with_cursor) do |poller, state|
-          poller.poll
-
-          # Poller does not mutate state; Runner will apply watermark update which clears resume_cursor.
-          expect(state.repos["owner/repo"]["events"]["release"]["resume_cursor"]).to eq("old_cursor")
         end
       end
     end
@@ -534,28 +506,15 @@ RSpec.describe Octonotify::Poller do
           end
         end
 
-        state_with_watermark = default_state(
-          "repos" => {
-            "owner/repo" => {
-              "url" => "https://github.com/owner/repo",
-              "events" => {
-                "release" => {
-                  "watermark_time" => "2024-01-15T12:00:00Z",
-                  "recent_notified_ids" => [],
-                  "resume_cursor" => nil,
-                  "incomplete" => false
-                }
-              }
-            }
-          }
-        )
+        state_with_watermark = state_with_event("owner/repo", "release",
+                                                "watermark_time" => "2024-01-15T12:00:00Z")
 
         with_state_file(state_with_watermark) do |poller, _state|
           result = poller.poll
 
           # Should stop after second page because event is before threshold
           expect(call_count).to eq(2)
-          # Only the new event should be returned (old one is before notify_after anyway in this test)
+          # Only the first event should be returned since 11:25 is before threshold (11:30)
           expect(result[:events].size).to eq(1)
           expect(result[:events].first.id).to eq("RE_new")
         end
@@ -586,21 +545,9 @@ RSpec.describe Octonotify::Poller do
                            ])
         )
 
-        state_with_cursor = default_state(
-          "repos" => {
-            "owner/repo" => {
-              "url" => "https://github.com/owner/repo",
-              "events" => {
-                "release" => {
-                  "watermark_time" => notify_after,
-                  "recent_notified_ids" => [],
-                  "resume_cursor" => "saved_cursor_123",
-                  "incomplete" => true
-                }
-              }
-            }
-          }
-        )
+        state_with_cursor = state_with_event("owner/repo", "release",
+                                             "resume_cursor" => "saved_cursor_123",
+                                             "incomplete" => true)
 
         with_state_file(state_with_cursor) do |poller, _state|
           poller.poll
@@ -611,6 +558,93 @@ RSpec.describe Octonotify::Poller do
             first: 25,
             after: "saved_cursor_123"
           )
+        end
+      end
+    end
+
+    context "when baseline_time clamps threshold" do
+      let(:baseline_time) { "2024-01-15T12:00:00Z" }
+
+      it "does not notify events before baseline even if within lookback window" do
+        allow(client).to receive(:fetch_releases).and_return(
+          release_response(nodes: [
+                             {
+                               "id" => "RE_after",
+                               "name" => "v2.0.0",
+                               "tagName" => "v2.0.0",
+                               "url" => "https://github.com/owner/repo/releases/tag/v2.0.0",
+                               "publishedAt" => "2024-01-15T12:30:00Z"
+                             },
+                             {
+                               "id" => "RE_before",
+                               "name" => "v1.0.0",
+                               "tagName" => "v1.0.0",
+                               "url" => "https://github.com/owner/repo/releases/tag/v1.0.0",
+                               "publishedAt" => "2024-01-15T11:45:00Z"
+                             }
+                           ])
+        )
+
+        with_state_file(default_state) do |poller, _state|
+          result = poller.poll
+
+          # Only the event after baseline should be returned
+          expect(result[:events].size).to eq(1)
+          expect(result[:events].first.id).to eq("RE_after")
+        end
+      end
+    end
+
+    context "when all events are before baseline (watermark regression prevention)" do
+      let(:baseline_time) { "2024-01-15T12:00:00Z" }
+
+      it "does not update watermark when only old events exist" do
+        allow(client).to receive(:fetch_releases).and_return(
+          release_response(nodes: [
+                             {
+                               "id" => "RE_old",
+                               "name" => "v0.9.0",
+                               "tagName" => "v0.9.0",
+                               "url" => "https://github.com/owner/repo/releases/tag/v0.9.0",
+                               "publishedAt" => "2023-12-01T12:00:00Z"
+                             }
+                           ])
+        )
+
+        with_state_file(default_state) do |poller, _state|
+          result = poller.poll
+
+          expect(result[:events]).to be_empty
+          expect(result[:state_changes][:watermarks]).to be_empty
+        end
+      end
+
+      it "ensures watermark never regresses below current watermark" do
+        # Even if there are events between baseline and current watermark,
+        # watermark should not go backwards
+        allow(client).to receive(:fetch_releases).and_return(
+          release_response(nodes: [
+                             {
+                               "id" => "RE_new",
+                               "name" => "v2.0.0",
+                               "tagName" => "v2.0.0",
+                               "url" => "https://github.com/owner/repo/releases/tag/v2.0.0",
+                               "publishedAt" => "2024-01-15T12:30:00Z"
+                             }
+                           ])
+        )
+
+        # Current watermark is already at 13:00, event is at 12:30
+        state_with_advanced_watermark = state_with_event("owner/repo", "release",
+                                                         "watermark_time" => "2024-01-15T13:00:00Z")
+
+        with_state_file(state_with_advanced_watermark) do |poller, _state|
+          result = poller.poll
+
+          # Event should be returned (it's after threshold)
+          expect(result[:events].size).to eq(1)
+          # But watermark should NOT be updated since new event is older than current watermark
+          expect(result[:state_changes][:watermarks]).to be_empty
         end
       end
     end

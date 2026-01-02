@@ -35,11 +35,13 @@ module Octonotify
 
       config = @config ||= Config.load(config_path: @config_path)
       state = @state ||= State.load(state_path: @state_path)
-
-      state.start_run
       result = nil
 
       begin
+        run_started_at = Time.now.utc.iso8601
+        state.start_run(started_at: run_started_at)
+        state.sync_with_config!(config, baseline_time: run_started_at)
+
         client = @client ||= build_client
         poller = @poller ||= Poller.new(config: config, state: state, client: client)
         mailer = @mailer ||= Mailer.new(config: config)
