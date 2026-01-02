@@ -23,6 +23,7 @@ RSpec.describe Octonotify::Runner do
 
   before do
     allow(state).to receive(:start_run)
+    allow(state).to receive(:sync_with_config!)
     allow(state).to receive(:finish_run)
     allow(state).to receive(:save)
     allow(poller).to receive(:poll).and_return(poll_result)
@@ -345,6 +346,7 @@ RSpec.describe Octonotify::Runner do
     it "calls state lifecycle methods in correct order with persist_state: true" do
       call_order = []
       allow(state).to receive(:start_run) { call_order << :start_run }
+      allow(state).to receive(:sync_with_config!) { call_order << :sync_with_config! }
       allow(state).to receive(:finish_run) { call_order << :finish_run }
       allow(state).to receive(:save) { call_order << :save }
 
@@ -360,12 +362,13 @@ RSpec.describe Octonotify::Runner do
 
       runner.run
 
-      expect(call_order).to eq(%i[start_run finish_run save])
+      expect(call_order).to eq(%i[start_run sync_with_config! finish_run save])
     end
 
     it "calls state lifecycle methods without save when persist_state: false" do
       call_order = []
       allow(state).to receive(:start_run) { call_order << :start_run }
+      allow(state).to receive(:sync_with_config!) { call_order << :sync_with_config! }
       allow(state).to receive(:finish_run) { call_order << :finish_run }
       allow(state).to receive(:save) { call_order << :save }
 
@@ -381,7 +384,7 @@ RSpec.describe Octonotify::Runner do
 
       runner.run
 
-      expect(call_order).to eq(%i[start_run finish_run])
+      expect(call_order).to eq(%i[start_run sync_with_config! finish_run])
       expect(call_order).not_to include(:save)
     end
 
@@ -406,7 +409,7 @@ RSpec.describe Octonotify::Runner do
     end
 
     context "with no-miss policy for state persistence" do
-      let(:config) { instance_double(Octonotify::Config) }
+      let(:config) { instance_double(Octonotify::Config, repos: { "owner/repo" => { events: ["release"] } }) }
       let(:client) { instance_double(Octonotify::GraphQLClient) }
       let(:poller) { instance_double(Octonotify::Poller) }
       let(:logger) { Logger.new(StringIO.new) }
@@ -458,7 +461,9 @@ RSpec.describe Octonotify::Runner do
 
           result = runner.run
           expect(result[:status]).to eq("partial_failure")
-          expect(state.repos).to eq({})
+          # State should have been synced (repo exists) but no state_changes applied
+          expect(state.repos["owner/repo"]).not_to be_nil
+          expect(state.repos["owner/repo"]["events"]["release"]["recent_notified_ids"]).to eq([])
         end
       end
 

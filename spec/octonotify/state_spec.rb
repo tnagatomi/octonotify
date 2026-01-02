@@ -19,8 +19,6 @@ RSpec.describe Octonotify::State do
         with_state_file do |path|
           state = described_class.load(state_path: path)
 
-          expect(state.initialized_at).not_to be_nil
-          expect(state.notify_after).to eq(state.initialized_at)
           expect(state.repos).to eq({})
           expect(state.last_run).to eq({})
         end
@@ -31,8 +29,6 @@ RSpec.describe Octonotify::State do
       it "loads existing state" do
         existing_state = <<~JSON
           {
-            "initialized_at": "2024-01-01T00:00:00Z",
-            "notify_after": "2024-01-01T00:00:00Z",
             "last_run": {
               "started_at": "2024-01-02T00:00:00Z",
               "finished_at": "2024-01-02T00:01:00Z",
@@ -43,6 +39,7 @@ RSpec.describe Octonotify::State do
                 "url": "https://github.com/owner/repo",
                 "events": {
                   "release": {
+                    "baseline_time": "2024-01-01T00:00:00Z",
                     "watermark_time": "2024-01-01T12:00:00Z",
                     "recent_notified_ids": ["R_123"]
                   }
@@ -55,10 +52,9 @@ RSpec.describe Octonotify::State do
         with_state_file(existing_state) do |path|
           state = described_class.load(state_path: path)
 
-          expect(state.initialized_at).to eq("2024-01-01T00:00:00Z")
-          expect(state.notify_after).to eq("2024-01-01T00:00:00Z")
           expect(state.last_run["status"]).to eq("success")
           expect(state.repos["owner/repo"]["url"]).to eq("https://github.com/owner/repo")
+          expect(state.repos["owner/repo"]["events"]["release"]["baseline_time"]).to eq("2024-01-01T00:00:00Z")
         end
       end
     end
@@ -78,12 +74,13 @@ RSpec.describe Octonotify::State do
     it "writes state to file" do
       with_state_file do |path|
         state = described_class.load(state_path: path)
-        state.repo_state("owner/repo")
+        config = instance_double(Octonotify::Config, repos: { "owner/repo" => { events: ["release"] } })
+        state.sync_with_config!(config, baseline_time: "2024-01-01T00:00:00Z")
         state.save
 
         data = JSON.parse(File.read(path))
-        expect(data["initialized_at"]).to eq(state.initialized_at)
         expect(data["repos"]["owner/repo"]["url"]).to eq("https://github.com/owner/repo")
+        expect(data["repos"]["owner/repo"]["events"]["release"]["baseline_time"]).to eq("2024-01-01T00:00:00Z")
       end
     end
   end
@@ -106,22 +103,238 @@ RSpec.describe Octonotify::State do
     end
   end
 
-  describe "#repo_state" do
-    it "creates new repo state if not exists" do
+  describe "#sync_with_config!" do
+    it "creates missing repos/events with baseline_time" do
       with_state_file do |path|
         state = described_class.load(state_path: path)
+        config = instance_double(Octonotify::Config, repos: {
+                                   "owner/repo1" => { events: %w[release issue_created] },
+                                   "owner/repo2" => { events: ["pull_request_merged"] }
+                                 })
 
-        repo = state.repo_state("owner/repo")
-        expect(repo["url"]).to eq("https://github.com/owner/repo")
-        expect(repo["events"]).to eq({})
+        state.sync_with_config!(config, baseline_time: "2024-01-15T12:00:00Z")
+
+        # Verify repo1
+        expect(state.repos["owner/repo1"]["events"]["release"]["baseline_time"]).to eq("2024-01-15T12:00:00Z")
+        expect(state.repos["owner/repo1"]["events"]["release"]["watermark_time"]).to eq("2024-01-15T12:00:00Z")
+        expect(state.repos["owner/repo1"]["events"]["issue_created"]["baseline_time"]).to eq("2024-01-15T12:00:00Z")
+
+        # Verify repo2
+        expect(state.repos["owner/repo2"]["events"]["pull_request_merged"]["baseline_time"])
+          .to eq("2024-01-15T12:00:00Z")
       end
     end
 
-    it "returns existing repo state" do
+    it "preserves existing event state" do
       existing_state = <<~JSON
         {
-          "initialized_at": "2024-01-01T00:00:00Z",
-          "notify_after": "2024-01-01T00:00:00Z",
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-10T12:00:00Z",
+                  "recent_notified_ids": ["R_123"],
+                  "resume_cursor": null,
+                  "last_success_at": "2024-01-10T12:00:00Z",
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
+        state = described_class.load(state_path: path)
+        config = instance_double(Octonotify::Config, repos: {
+                                   "owner/repo" => { events: ["release"] }
+                                 })
+
+        state.sync_with_config!(config, baseline_time: "2024-01-15T12:00:00Z")
+
+        # Existing state should be preserved
+        expect(state.repos["owner/repo"]["events"]["release"]["baseline_time"]).to eq("2024-01-01T00:00:00Z")
+        expect(state.repos["owner/repo"]["events"]["release"]["watermark_time"]).to eq("2024-01-10T12:00:00Z")
+        expect(state.repos["owner/repo"]["events"]["release"]["recent_notified_ids"]).to eq(["R_123"])
+      end
+    end
+
+    it "adds new event type to existing repo" do
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-10T12:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
+        state = described_class.load(state_path: path)
+        config = instance_double(Octonotify::Config, repos: {
+                                   "owner/repo" => { events: %w[release issue_created] }
+                                 })
+
+        state.sync_with_config!(config, baseline_time: "2024-01-15T12:00:00Z")
+
+        # New event type should have the new baseline_time
+        expect(state.repos["owner/repo"]["events"]["issue_created"]["baseline_time"]).to eq("2024-01-15T12:00:00Z")
+        # Existing event type should preserve its baseline_time
+        expect(state.repos["owner/repo"]["events"]["release"]["baseline_time"]).to eq("2024-01-01T00:00:00Z")
+      end
+    end
+
+    it "prunes repos not in config" do
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo1": {
+              "url": "https://github.com/owner/repo1",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            },
+            "owner/repo2": {
+              "url": "https://github.com/owner/repo2",
+              "events": {}
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
+        state = described_class.load(state_path: path)
+        config = instance_double(Octonotify::Config, repos: {
+                                   "owner/repo1" => { events: ["release"] }
+                                 })
+
+        state.sync_with_config!(config, baseline_time: "2024-01-15T12:00:00Z")
+
+        expect(state.repos.keys).to eq(["owner/repo1"])
+        expect(state.repos["owner/repo2"]).to be_nil
+      end
+    end
+
+    it "prunes event types not in config" do
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                },
+                "issue_created": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
+        state = described_class.load(state_path: path)
+        config = instance_double(Octonotify::Config, repos: {
+                                   "owner/repo" => { events: ["release"] }
+                                 })
+
+        state.sync_with_config!(config, baseline_time: "2024-01-15T12:00:00Z")
+
+        expect(state.repos["owner/repo"]["events"].keys).to eq(["release"])
+        expect(state.repos["owner/repo"]["events"]["issue_created"]).to be_nil
+      end
+    end
+  end
+
+  describe "#event_state" do
+    it "returns event state when it exists" do
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T12:00:00Z",
+                  "recent_notified_ids": ["R_123"],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
+        state = described_class.load(state_path: path)
+        event = state.event_state("owner/repo", "release")
+
+        expect(event["baseline_time"]).to eq("2024-01-01T00:00:00Z")
+        expect(event["watermark_time"]).to eq("2024-01-01T12:00:00Z")
+        expect(event["recent_notified_ids"]).to eq(["R_123"])
+      end
+    end
+
+    it "raises StateError when repo does not exist" do
+      with_state_file do |path|
+        state = described_class.load(state_path: path)
+
+        expect do
+          state.event_state("owner/repo", "release")
+        end.to raise_error(Octonotify::StateError, /Unknown repo/)
+      end
+    end
+
+    it "raises StateError when event type does not exist" do
+      existing_state = <<~JSON
+        {
+          "last_run": {},
           "repos": {
             "owner/repo": {
               "url": "https://github.com/owner/repo",
@@ -133,30 +346,40 @@ RSpec.describe Octonotify::State do
 
       with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
-        repo = state.repo_state("owner/repo")
-        expect(repo["url"]).to eq("https://github.com/owner/repo")
-      end
-    end
-  end
 
-  describe "#event_state" do
-    it "creates new event state if not exists" do
-      with_state_file do |path|
-        state = described_class.load(state_path: path)
-
-        event = state.event_state("owner/repo", "release")
-        expect(event["watermark_time"]).to eq(state.notify_after)
-        expect(event["recent_notified_ids"]).to eq([])
-        expect(event["incomplete"]).to be(false)
+        expect do
+          state.event_state("owner/repo", "release")
+        end.to raise_error(Octonotify::StateError, /Unknown event type/)
       end
     end
   end
 
   describe "#update_watermark" do
     it "updates watermark and clears incomplete state" do
-      with_state_file do |path|
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": "cursor123",
+                  "last_success_at": null,
+                  "incomplete": true,
+                  "reason": "rate limit"
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
-        state.set_resume_cursor("owner/repo", "release", "cursor123", reason: "rate limit")
 
         state.update_watermark("owner/repo", "release", "2024-01-15T00:00:00Z")
 
@@ -171,7 +394,29 @@ RSpec.describe Octonotify::State do
 
   describe "#set_resume_cursor" do
     it "sets cursor and marks as incomplete" do
-      with_state_file do |path|
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
 
         state.set_resume_cursor("owner/repo", "release", "cursor123", reason: "rate limit exceeded")
@@ -186,7 +431,29 @@ RSpec.describe Octonotify::State do
 
   describe "#add_notified_id and #notified?" do
     it "tracks notified IDs" do
-      with_state_file do |path|
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
 
         expect(state.notified?("owner/repo", "release", "R_123")).to be(false)
@@ -197,7 +464,29 @@ RSpec.describe Octonotify::State do
     end
 
     it "limits recent IDs to RECENT_IDS_LIMIT" do
-      with_state_file do |path|
+      existing_state = <<~JSON
+        {
+          "last_run": {},
+          "repos": {
+            "owner/repo": {
+              "url": "https://github.com/owner/repo",
+              "events": {
+                "release": {
+                  "baseline_time": "2024-01-01T00:00:00Z",
+                  "watermark_time": "2024-01-01T00:00:00Z",
+                  "recent_notified_ids": [],
+                  "resume_cursor": null,
+                  "last_success_at": null,
+                  "incomplete": false,
+                  "reason": null
+                }
+              }
+            }
+          }
+        }
+      JSON
+
+      with_state_file(existing_state) do |path|
         state = described_class.load(state_path: path)
 
         150.times { |i| state.add_notified_id("owner/repo", "release", "R_#{i}") }
@@ -206,49 +495,6 @@ RSpec.describe Octonotify::State do
         expect(event["recent_notified_ids"].size).to eq(described_class::RECENT_IDS_LIMIT)
         expect(state.notified?("owner/repo", "release", "R_0")).to be(false)
         expect(state.notified?("owner/repo", "release", "R_149")).to be(true)
-      end
-    end
-  end
-
-  describe "#should_notify?" do
-    it "returns true for events after notify_after" do
-      existing_state = <<~JSON
-        {
-          "initialized_at": "2024-01-01T00:00:00Z",
-          "notify_after": "2024-01-01T00:00:00Z",
-          "repos": {}
-        }
-      JSON
-
-      with_state_file(existing_state) do |path|
-        state = described_class.load(state_path: path)
-
-        expect(state.should_notify?("2024-01-01T00:00:01Z")).to be(true)
-        expect(state.should_notify?("2024-01-02T00:00:00Z")).to be(true)
-      end
-    end
-
-    it "returns false for events at or before notify_after" do
-      existing_state = <<~JSON
-        {
-          "initialized_at": "2024-01-01T00:00:00Z",
-          "notify_after": "2024-01-01T00:00:00Z",
-          "repos": {}
-        }
-      JSON
-
-      with_state_file(existing_state) do |path|
-        state = described_class.load(state_path: path)
-
-        expect(state.should_notify?("2024-01-01T00:00:00Z")).to be(false)
-        expect(state.should_notify?("2023-12-31T00:00:00Z")).to be(false)
-      end
-    end
-
-    it "returns false for nil event time" do
-      with_state_file do |path|
-        state = described_class.load(state_path: path)
-        expect(state.should_notify?(nil)).to be(false)
       end
     end
   end

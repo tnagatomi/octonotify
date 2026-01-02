@@ -9,7 +9,7 @@ module Octonotify
     DEFAULT_STATE_PATH = ".octonotify/state.json"
     RECENT_IDS_LIMIT = 100
 
-    attr_reader :initialized_at, :notify_after, :last_run, :repos
+    attr_reader :last_run, :repos
 
     def initialize(state_path: DEFAULT_STATE_PATH)
       @state_path = state_path
@@ -27,8 +27,6 @@ module Octonotify
       ensure_state_path_is_safe!
 
       data = {
-        "initialized_at" => @initialized_at,
-        "notify_after" => @notify_after,
         "last_run" => @last_run,
         "repos" => @repos
       }
@@ -37,9 +35,9 @@ module Octonotify
       atomic_write(@state_path, json)
     end
 
-    def start_run
+    def start_run(started_at: Time.now.utc.iso8601)
       @last_run = {
-        "started_at" => Time.now.utc.iso8601,
+        "started_at" => started_at,
         "finished_at" => nil,
         "status" => "running",
         "rate_limit" => nil
@@ -57,8 +55,13 @@ module Octonotify
     end
 
     def event_state(repo_name, event_type)
-      repo = repo_state(repo_name)
-      repo["events"][event_type] ||= new_event_state
+      repo = @repos[repo_name]
+      raise StateError, "Unknown repo: #{repo_name}" unless repo
+
+      event = repo["events"][event_type]
+      raise StateError, "Unknown event type: #{event_type} for repo: #{repo_name}" unless event
+
+      event
     end
 
     def update_watermark(repo_name, event_type, time)
@@ -89,15 +92,34 @@ module Octonotify
       state["recent_notified_ids"].include?(id)
     end
 
-    def should_notify?(event_time)
-      return false if event_time.nil?
+    def sync_with_config!(config, baseline_time:)
+      # Add missing repos/events from config with baseline_time
+      config.repos.each do |repo_name, repo_config|
+        repo_config[:events].each do |event_type|
+          ensure_event_state_exists(repo_name, event_type, baseline_time: baseline_time)
+        end
+      end
 
-      event_t = event_time.is_a?(Time) ? event_time : Time.parse(event_time)
-      notify_after_t = Time.parse(@notify_after)
-      event_t > notify_after_t
+      prune_stale_state(config)
     end
 
     private
+
+    def ensure_event_state_exists(repo_name, event_type, baseline_time:)
+      @repos[repo_name] ||= new_repo_state(repo_name)
+      return if @repos[repo_name]["events"].key?(event_type)
+
+      @repos[repo_name]["events"][event_type] = new_event_state(baseline_time: baseline_time)
+    end
+
+    def prune_stale_state(config)
+      @repos.delete_if { |repo_name, _| !config.repos.key?(repo_name) }
+
+      @repos.each_key do |repo_name|
+        config_events = config.repos[repo_name][:events]
+        @repos[repo_name]["events"].delete_if { |event_type, _| !config_events.include?(event_type) }
+      end
+    end
 
     def load_or_initialize
       if File.exist?(@state_path)
@@ -110,8 +132,6 @@ module Octonotify
 
     def load_state
       data = JSON.parse(File.read(@state_path))
-      @initialized_at = data["initialized_at"]
-      @notify_after = data["notify_after"]
       @last_run = data["last_run"] || {}
       @repos = data["repos"] || {}
     rescue JSON::ParserError => e
@@ -119,9 +139,6 @@ module Octonotify
     end
 
     def initialize_state
-      now = Time.now.utc.iso8601
-      @initialized_at = now
-      @notify_after = now
       @last_run = {}
       @repos = {}
     end
@@ -133,9 +150,10 @@ module Octonotify
       }
     end
 
-    def new_event_state
+    def new_event_state(baseline_time:)
       {
-        "watermark_time" => @notify_after,
+        "baseline_time" => baseline_time,
+        "watermark_time" => baseline_time,
         "resume_cursor" => nil,
         "recent_notified_ids" => [],
         "last_success_at" => nil,
