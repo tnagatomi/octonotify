@@ -15,12 +15,6 @@ Currently supported events:
 
 Fork this repository to your own GitHub account.
 
-#### Recommended: use a private repository for reliable scheduling
-
-GitHub Actions scheduled workflows have special behavior in public repositories: if there is no repository activity for 60 days, scheduled workflows are automatically disabled. Using a private repository is recommended to avoid unexpected schedule stoppage due to repository inactivity (for example, once your configuration is settled, you may rarely push changes). See [GitHub Docs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
-
-Note: GitHub Actions usage for private repositories depends on your plan. On the Free plan, GitHub-hosted runner minutes are limited (quota), so keep an eye on your Actions usage or consider a paid plan/self-hosted runners if needed.
-
 ### 2. Configure Secrets
 
 Go to your forked repository's Settings → Secrets and variables → Actions and configure the following secrets:
